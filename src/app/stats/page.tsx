@@ -6,11 +6,11 @@ import { PracticeStats } from "@/components/practice-stats";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/back-button";
-import { BarChart3, TrendingUp, Activity, House } from "lucide-react";
+import { BarChart3, TrendingUp, Activity, House, CalendarCheck, FileText } from "lucide-react";
 import Link from "next/link";
 
 export default function StatsPage() {
-    const { t, language } = useLanguage();
+    const { t } = useLanguage();
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -25,7 +25,19 @@ export default function StatsPage() {
                         {t.stats?.headerDesc || "View your learning progress and data analysis"}
                     </p>
                 </div>
-                <div className="ml-auto flex items-center">
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Link href="/reviews">
+                        <Button variant="outline" size="sm">
+                            <CalendarCheck className="mr-2 h-4 w-4" />
+                            待复盘
+                        </Button>
+                    </Link>
+                    <Link href="/weekly-report">
+                        <Button variant="outline" size="sm">
+                            <FileText className="mr-2 h-4 w-4" />
+                            周报
+                        </Button>
+                    </Link>
                     <Link href="/">
                         <Button variant="ghost" size="icon">
                             <House className="h-5 w-5" />

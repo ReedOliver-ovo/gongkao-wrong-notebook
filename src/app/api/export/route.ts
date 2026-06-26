@@ -62,13 +62,14 @@ export async function GET(req: Request) {
         });
 
         const exportData = {
-            version: 1,
+            version: 2,
             exportedAt: new Date().toISOString(),
             scope: exportAll ? 'all' : 'user',
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
+                examType: user.examType,
                 educationStage: user.educationStage,
                 enrollmentYear: user.enrollmentYear,
                 role: user.role,

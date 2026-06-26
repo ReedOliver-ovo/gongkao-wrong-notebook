@@ -59,6 +59,17 @@ export interface ErrorItem {
     mistakeAnalysis?: string | null;
     mistakeStatus?: 'not_attempted' | 'wrong_attempt' | 'unknown' | string | null;
     knowledgePoints?: string | null;
+    examType?: string | null;
+    subjectModule?: string | null;
+    questionType?: string | null;
+    optionsJson?: string | null;
+    options?: string[];
+    mistakeReason?: string | null;
+    aiMistakeReasonSuggestion?: string | null;
+    fastestSolution?: string | null;
+    trapAnalysis?: string | null;
+    nextReviewTip?: string | null;
+    similarQuestionMethod?: string | null;
 
     source?: string | null;
     errorType?: string | null;
@@ -66,6 +77,11 @@ export interface ErrorItem {
     tags?: Tag[];
 
     masteryLevel: number;
+    masteryStatus?: string | null;
+    nextReviewAt?: string | null;
+    lastReviewedAt?: string | null;
+    consecutiveCorrectCount?: number;
+    wrongReviewCount?: number;
     gradeSemester?: string | null;
     paperLevel?: string | null;
 
@@ -87,6 +103,7 @@ export interface UserProfile {
     id: string;
     email: string;
     name?: string | null;
+    examType?: string | null;
     educationStage?: string | null;
     enrollmentYear?: number | null;
     role: string;
@@ -96,6 +113,7 @@ export interface UserProfile {
 export interface UpdateUserProfileRequest {
     name?: string;
     email?: string;
+    examType?: string;
     educationStage?: string;
     enrollmentYear?: number;
     password?: string;
@@ -144,6 +162,38 @@ export interface AnalyticsData {
     masteryRate: number;
     subjectStats: { name: string; value: number }[];
     activityData: { date: string; count: number }[];
+    weeklyNewCount?: number;
+    weeklyReviewCompletedCount?: number;
+    secondReviewCorrectRate?: string;
+    moduleTop5?: { name: string; value: number }[];
+    mistakeReasonTop5?: { name: string; value: number }[];
+    longTermDifficultItems?: ErrorItem[];
+}
+
+export interface ReviewScheduleItem {
+    id: string;
+    errorItemId: string;
+    reviewStage: number;
+    scheduledFor: string;
+    completedAt?: string | null;
+    isCorrect?: boolean | null;
+    createdAt: string;
+    errorItem?: ErrorItem;
+}
+
+export interface WeeklyReportData {
+    id: string;
+    weekStart: string;
+    weekEnd: string;
+    content: {
+        weeklyPerformance: string;
+        weakModules: string[];
+        mainMistakeReasons: string[];
+        typicalErrorItems: { id: string; questionText: string; reason: string }[];
+        nextWeekPlan: string[];
+    };
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface PracticeStatsData {
@@ -198,6 +248,7 @@ export interface AdminUserStats {
     role: string;
     isActive: boolean;
     createdAt: string;
+    examType: string | null;
     educationStage: string | null;
     enrollmentYear: number | null;
     errorCount: number;
@@ -213,6 +264,7 @@ export interface AdminUserDetail {
         role: string;
         isActive: boolean;
         createdAt: string;
+        examType: string | null;
         educationStage: string | null;
         enrollmentYear: number | null;
     };
@@ -241,6 +293,7 @@ export interface RegisterRequest {
     name: string;
     email: string;
     password: string;
-    educationStage: string;
-    enrollmentYear: number;
+    examType: string;
+    educationStage?: string;
+    enrollmentYear?: number;
 }

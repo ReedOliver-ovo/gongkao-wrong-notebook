@@ -11,8 +11,15 @@ import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { TagInput } from "@/components/tag-input";
 import { NotebookSelector } from "@/components/notebook-selector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { inferSubjectFromName } from "@/lib/knowledge-tags";
 import type { MistakeStatus } from "@/lib/mistake-status";
+import {
+    CIVIL_SERVICE_EXAM_TYPES,
+    CIVIL_SERVICE_MISTAKE_REASONS,
+    CIVIL_SERVICE_SUBJECT_MODULES,
+    type CivilServiceExamType,
+    type CivilServiceMistakeReason,
+    type CivilServiceSubjectModule,
+} from "@/lib/civil-service";
 
 interface DirectTextEditorProps {
     onSubmit: (data: {
@@ -24,15 +31,18 @@ interface DirectTextEditorProps {
         mistakeStatus: string;
         knowledgePoints: string[];
         subjectId: string;
-        gradeSemester?: string;
         paperLevel?: string;
+        examType?: string;
+        subjectModule?: string;
+        questionType?: string;
+        mistakeReason?: string;
     }) => Promise<void>;
     defaultNotebookId?: string;
     defaultNotebookName?: string;
     isSaving: boolean;
 }
 
-export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookName, isSaving }: DirectTextEditorProps) {
+export function DirectTextEditor({ onSubmit, defaultNotebookId, isSaving }: DirectTextEditorProps) {
     const { t } = useLanguage();
     const [previewField, setPreviewField] = useState<string | null>(null);
 
@@ -44,8 +54,11 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
     const [mistakeStatus, setMistakeStatus] = useState<MistakeStatus>("unknown");
     const [knowledgePoints, setKnowledgePoints] = useState<string[]>([]);
     const [subjectId, setSubjectId] = useState(defaultNotebookId || "");
-    const [gradeSemester, setGradeSemester] = useState("");
     const [paperLevel, setPaperLevel] = useState("a");
+    const [examType, setExamType] = useState<CivilServiceExamType>("省考");
+    const [subjectModule, setSubjectModule] = useState<CivilServiceSubjectModule>("其他");
+    const [questionType, setQuestionType] = useState("");
+    const [mistakeReason, setMistakeReason] = useState<CivilServiceMistakeReason>("其他");
 
     const handleSubmit = async () => {
         if (!questionText.trim()) return;
@@ -63,8 +76,11 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
             mistakeStatus,
             knowledgePoints,
             subjectId,
-            gradeSemester: gradeSemester || undefined,
             paperLevel,
+            examType,
+            subjectModule,
+            questionType: questionType.trim(),
+            mistakeReason,
         });
     };
 
@@ -76,8 +92,11 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
         setMistakeAnalysis("");
         setMistakeStatus("unknown");
         setKnowledgePoints([]);
-        setGradeSemester("");
         setPaperLevel("a");
+        setExamType("省考");
+        setSubjectModule("其他");
+        setQuestionType("");
+        setMistakeReason("其他");
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -95,7 +114,7 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
             label: t.editor?.question || "题目内容",
             value: questionText,
             setter: setQuestionText,
-            placeholder: "输入题目内容...\n支持 Markdown 和 LaTeX 公式\n\n示例：\n# 题目一\n\n已知 $f(x) = x^2 + 2x + 1$，求 $f(3)$ 的值。\n\n**解题要求：**\n1. 写出解题步骤\n2. 给出最终答案",
+            placeholder: "输入题目内容...\n支持 Markdown 和 LaTeX 公式\n\n示例：\n# 资料分析\n\n2025 年某市一般公共预算收入为 960 亿元，同比增长 12.5%。问 2024 年该市一般公共预算收入约为多少亿元？\n\nA. 820\nB. 853\nC. 875\nD. 900",
             minHeight: "min-h-[180px]",
             required: true,
         },
@@ -104,7 +123,7 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
             label: t.editor?.answer || "参考答案",
             value: answerText,
             setter: setAnswerText,
-            placeholder: "输入参考答案...\n\n示例：\n$f(3) = 3^2 + 2 \\times 3 + 1 = 9 + 6 + 1 = 16$",
+            placeholder: "输入参考答案...\n\n示例：\nB。基期量 = 现期量 / (1 + 增长率) = 960 / 1.125 ≈ 853 亿元。",
             minHeight: "min-h-[120px]",
         },
         {
@@ -112,7 +131,7 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
             label: t.editor?.analysis || "解题分析",
             value: analysis,
             setter: setAnalysis,
-            placeholder: "输入解题分析...\n\n示例：\n这是一个**一元二次函数**求值问题。\n\n将 $x=3$ 代入函数表达式：\n$$f(3) = 3^2 + 2 \\times 3 + 1 = 16$$",
+            placeholder: "输入解题分析...\n\n示例：\n这是资料分析中的基期量问题。看到“现期量 + 同比增长率”，优先使用公式：基期量 = 现期量 / (1 + 增长率)。本题可用估算：960 ÷ 1.125 接近 853。",
             minHeight: "min-h-[150px]",
         },
         {
@@ -156,23 +175,13 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
                     </Button>
                 </div>
 
-                {/* Notebook & Grade Selection */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Notebook & Paper Level Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label>{t.editor?.selectNotebook || "选择错题本"} *</Label>
                         <NotebookSelector
                             value={subjectId}
                             onChange={setSubjectId}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>{t.editor?.gradeSemester || "年级/学期"}</Label>
-                        <input
-                            type="text"
-                            value={gradeSemester}
-                            onChange={(e) => setGradeSemester(e.target.value)}
-                            placeholder="如：初二上学期"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         />
                     </div>
                     <div className="space-y-2">
@@ -190,6 +199,59 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
                                 <SelectItem value="other">{t.editor?.paperLevels?.other || "其他"}</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+                </div>
+
+                {/* Civil Service Review Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                        <Label>考试类型</Label>
+                        <Select value={examType} onValueChange={(val) => setExamType(val as CivilServiceExamType)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CIVIL_SERVICE_EXAM_TYPES.map(value => (
+                                    <SelectItem key={value} value={value}>{value}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>科目模块</Label>
+                        <Select value={subjectModule} onValueChange={(val) => setSubjectModule(val as CivilServiceSubjectModule)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CIVIL_SERVICE_SUBJECT_MODULES.map(value => (
+                                    <SelectItem key={value} value={value}>{value}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>错因分类</Label>
+                        <Select value={mistakeReason} onValueChange={(val) => setMistakeReason(val as CivilServiceMistakeReason)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CIVIL_SERVICE_MISTAKE_REASONS.map(value => (
+                                    <SelectItem key={value} value={value}>{value}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>题型</Label>
+                        <input
+                            type="text"
+                            value={questionType}
+                            onChange={(e) => setQuestionType(e.target.value)}
+                            placeholder="如：削弱加强"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        />
                     </div>
                 </div>
 
@@ -261,13 +323,13 @@ export function DirectTextEditor({ onSubmit, defaultNotebookId, defaultNotebookN
                 {/* Knowledge Tags */}
                 <div className="space-y-2">
                     <Label>{t.editor?.tags || "知识点标签"}</Label>
-                    <TagInput
-                        value={knowledgePoints}
-                        onChange={setKnowledgePoints}
-                        placeholder={t.editor?.tagsPlaceholder || "输入知识点标签..."}
-                        enterHint={t.editor?.createTagHint}
-                        subject={inferSubjectFromName(defaultNotebookName || null) || undefined}
-                    />
+                        <TagInput
+                            value={knowledgePoints}
+                            onChange={setKnowledgePoints}
+                            placeholder={t.editor?.tagsPlaceholder || "输入知识点标签..."}
+                            enterHint={t.editor?.createTagHint}
+                            subject={subjectModule}
+                        />
                     <p className="text-xs text-muted-foreground">
                         {t.editor?.tagsHint || "💡 输入时会自动匹配已有标签"}
                     </p>

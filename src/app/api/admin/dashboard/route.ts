@@ -40,6 +40,7 @@ export async function GET() {
                 role: true,
                 isActive: true,
                 createdAt: true,
+                examType: true,
                 educationStage: true,
                 enrollmentYear: true,
                 _count: {
@@ -126,6 +127,7 @@ export async function GET() {
                 role: u.role,
                 isActive: u.isActive,
                 createdAt: u.createdAt,
+                examType: u.examType,
                 educationStage: u.educationStage,
                 enrollmentYear: u.enrollmentYear,
                 errorCount: u._count.errorItems,

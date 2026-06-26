@@ -19,8 +19,7 @@ async function main() {
         await prisma.user.update({
             where: { email },
             data: {
-                educationStage: 'junior_high',
-                enrollmentYear: 2025,
+                examType: '省考',
             }
         });
         return;
@@ -36,8 +35,7 @@ async function main() {
             name,
             role: 'admin',
             isActive: true,
-            educationStage: 'junior_high',
-            enrollmentYear: 2025,
+            examType: '省考',
         },
     });
 

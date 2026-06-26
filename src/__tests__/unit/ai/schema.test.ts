@@ -116,6 +116,62 @@ describe('ParsedQuestionSchema 验证', () => {
         });
     });
 
+    describe('考公/考编 AI 字段验证', () => {
+        it('应该接受完整的考公/考编分析字段', () => {
+            const result = ParsedQuestionSchema.safeParse({
+                ...validBaseQuestion,
+                examType: '国考',
+                subjectModule: '资料分析',
+                questionType: '资料分析-增长率',
+                options: ['A. 10%', 'B. 12%', 'C. 15%', 'D. 20%'],
+                mistakeReason: '计算错误',
+                aiMistakeReasonSuggestion: '计算错误',
+                fastestSolution: '先估算分母，再用截位直除。',
+                trapAnalysis: '选项差距小，不能直接口算。',
+                nextReviewTip: '下次先判断增长率公式再代数。',
+                similarQuestionMethod: '看到基期量与现期量同时出现，优先识别增长率题型。',
+            });
+
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.examType).toBe('国考');
+                expect(result.data.subjectModule).toBe('资料分析');
+                expect(result.data.options).toHaveLength(4);
+                expect(result.data.mistakeReason).toBe('计算错误');
+                expect(result.data.fastestSolution).toContain('截位直除');
+            }
+        });
+
+        it('缺少考公/考编字段时应填充保守默认值', () => {
+            const result = ParsedQuestionSchema.safeParse(validBaseQuestion);
+
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.examType).toBe('省考');
+                expect(result.data.subjectModule).toBe('其他');
+                expect(result.data.questionType).toBe('');
+                expect(result.data.options).toEqual([]);
+                expect(result.data.mistakeReason).toBe('其他');
+                expect(result.data.aiMistakeReasonSuggestion).toBe('其他');
+                expect(result.data.fastestSolution).toBe('');
+                expect(result.data.trapAnalysis).toBe('');
+                expect(result.data.nextReviewTip).toBe('');
+                expect(result.data.similarQuestionMethod).toBe('');
+            }
+        });
+
+        it('非法枚举值应该被拒绝', () => {
+            const result = ParsedQuestionSchema.safeParse({
+                ...validBaseQuestion,
+                examType: '中考',
+                subjectModule: '数学',
+                mistakeReason: '不会',
+            });
+
+            expect(result.success).toBe(false);
+        });
+    });
+
     describe('safeParseParsedQuestion', () => {
         it('应该安全解析有效数据', () => {
             const result = safeParseParsedQuestion(validBaseQuestion);

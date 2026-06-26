@@ -13,8 +13,8 @@ interface TagInputProps {
     placeholder?: string;
     className?: string;
     enterHint?: string;
-    subject?: string; // 新增：用于过滤标签建议的学科
-    gradeStage?: string; // 新增：用于过滤标签建议的学段 (primary, junior_high, senior_high)
+    subject?: string; // 科目模块；参数名保留用于兼容现有调用
+    gradeStage?: string; // 旧字段兼容，不再用于请求
 }
 
 export function TagInput({ value = [], onChange, placeholder = "Enter tags...", className = "", enterHint, subject, gradeStage }: TagInputProps) {
@@ -41,9 +41,6 @@ export function TagInput({ value = [], onChange, placeholder = "Enter tags...", 
             const params = new URLSearchParams({ q: query });
             if (subject) {
                 params.append('subject', subject);
-            }
-            if (gradeStage) {
-                params.append('stage', gradeStage);
             }
             const data = await apiClient.get<TagSuggestionsResponse>(`/api/tags/suggestions?${params.toString()}`);
             const serverSuggestions = data.suggestions || [];

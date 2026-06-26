@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
 import { createErrorResponse, ErrorCode } from "@/lib/api-errors";
-import { calculateGrade } from "@/lib/grade-calculator";
-import { inferSubjectFromName } from "@/lib/knowledge-tags";
-import { findParentTagIdForGrade } from "@/lib/tag-recognition";
+import { normalizeKnowledgeTagSubject } from "@/lib/civil-service";
 import { compare } from "bcryptjs";
 
 const logger = createLogger('api:openclaw:batch-upload');
@@ -112,23 +110,12 @@ async function createErrorItem(
     parsedData: OpenclawResponse['data'],
     subjectId?: string
 ) {
-    const { questionText, answerText, analysis, knowledgePoints, errorType, source } = parsedData || {};
+    const { questionText, answerText, analysis, knowledgePoints, errorType, source, subject } = parsedData || {};
 
     const tagNames: string[] = Array.isArray(knowledgePoints) ? knowledgePoints : [];
     const tagConnections: { id: string }[] = [];
 
-    const subject = subjectId ? await prisma.subject.findUnique({ where: { id: subjectId } }) : null;
-    const subjectKey = subject ? inferSubjectFromName(subject.name) : null;
-
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { educationStage: true, enrollmentYear: true }
-    });
-
-    let finalGradeSemester: string | null = null;
-    if (user?.educationStage && user?.enrollmentYear) {
-        finalGradeSemester = calculateGrade(user.educationStage, user.enrollmentYear);
-    }
+    const subjectKey = normalizeKnowledgeTagSubject(subject);
 
     for (const tagName of tagNames) {
         try {
@@ -143,17 +130,13 @@ async function createErrorItem(
             });
 
             if (!tag) {
-                const parentId = finalGradeSemester && subjectKey 
-                    ? await findParentTagIdForGrade(finalGradeSemester, subjectKey)
-                    : null;
-
                 tag = await prisma.knowledgeTag.create({
                     data: {
                         name: tagName,
-                        subject: subjectKey || 'other',
+                        subject: subjectKey,
                         isSystem: false,
                         userId: userId,
-                        parentId: parentId || undefined,
+                        parentId: null,
                     },
                 });
             }
@@ -174,7 +157,8 @@ async function createErrorItem(
             answerText: answerText || null,
             analysis: analysis || null,
             knowledgePoints: JSON.stringify(tagNames),
-            gradeSemester: finalGradeSemester,
+            gradeSemester: null,
+            subjectModule: subjectKey,
             paperLevel: null,
             errorType: errorType || null,
             source: source || 'Openclaw',

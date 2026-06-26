@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+    CIVIL_SERVICE_EXAM_TYPES,
+    CIVIL_SERVICE_MASTERY_STATUS,
+    CIVIL_SERVICE_MISTAKE_REASONS,
+    CIVIL_SERVICE_SUBJECT_MODULES,
+} from '@/lib/civil-service';
 
 /**
  * Zod schema for validating AI-parsed questions
@@ -18,6 +24,17 @@ export const ParsedQuestionSchema = z.object({
     ]),
     knowledgePoints: z.array(z.string()).max(5, "知识点最多 5 个"),
     requiresImage: z.boolean().optional().default(false), // 题目是否依赖图片（如几何题）
+    examType: z.enum(CIVIL_SERVICE_EXAM_TYPES).optional().default("省考"),
+    subjectModule: z.enum(CIVIL_SERVICE_SUBJECT_MODULES).optional().default("其他"),
+    questionType: z.string().optional().default(""),
+    options: z.array(z.string()).optional().default([]),
+    mistakeReason: z.enum(CIVIL_SERVICE_MISTAKE_REASONS).optional().default("其他"),
+    aiMistakeReasonSuggestion: z.enum(CIVIL_SERVICE_MISTAKE_REASONS).optional().default("其他"),
+    fastestSolution: z.string().optional().default(""),
+    trapAnalysis: z.string().optional().default(""),
+    nextReviewTip: z.string().optional().default(""),
+    similarQuestionMethod: z.string().optional().default(""),
+    masteryStatus: z.enum(CIVIL_SERVICE_MASTERY_STATUS).optional().default("未复盘"),
 });
 
 /**

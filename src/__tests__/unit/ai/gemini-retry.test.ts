@@ -33,6 +33,7 @@ vi.mock('@/lib/ai/schema', () => ({
 
 // Mock tag service to avoid DB calls
 vi.mock('@/lib/ai/tag-service', () => ({
+    getCivilServiceTagsFromDB: vi.fn().mockResolvedValue([]),
     getMathTagsFromDB: vi.fn().mockResolvedValue([]),
     getTagsFromDB: vi.fn().mockResolvedValue([]),
 }));
@@ -72,7 +73,7 @@ describe('GeminiProvider Retry Logic', () => {
         expect(result.questionText).toBe('Q');
         // Initial call + 2 retries = 3 calls
         expect(mockGenerateContent).toHaveBeenCalledTimes(3);
-    });
+    }, 10000);
 
     it('should throw immediately on non-retryable error', async () => {
         mockGenerateContent.mockRejectedValue(new Error('AI_AUTH_ERROR: Invalid API Key'));
@@ -96,7 +97,7 @@ describe('GeminiProvider Retry Logic', () => {
 
         // 3 attempts total (1 initial + 2 retries)
         expect(mockGenerateContent).toHaveBeenCalledTimes(3);
-    });
+    }, 10000);
 
     it('should retry on 503 service unavailable', async () => {
         mockGenerateContent

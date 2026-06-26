@@ -3,9 +3,15 @@ import { AIService, ParsedQuestion, DifficultyLevel, AIConfig, ReanswerQuestionR
 import { generateAnalyzePrompt, generateSimilarQuestionPrompt, generateGeogebraPrompt } from './prompts';
 import { safeParseParsedQuestion } from './schema';
 import { getAppConfig } from '../config';
-import { getMathTagsFromDB, getTagsFromDB } from './tag-service';
+import { getCivilServiceTagsFromDB } from './tag-service';
 import { createLogger } from '../logger';
 import { normalizeMistakeStatusForSave } from '../mistake-status';
+import {
+    normalizeExamType,
+    normalizeMistakeReason,
+    normalizeSubjectModule,
+    parseOptionsText,
+} from '../civil-service';
 
 const logger = createLogger('ai:gemini');
 
@@ -110,6 +116,7 @@ export class GeminiProvider implements AIService {
         const wrongAnswerText = this.extractTag(text, "wrong_answer_text") || "";
         const mistakeAnalysis = this.extractTag(text, "mistake_analysis") || "";
         const mistakeStatusRaw = this.extractTag(text, "mistake_status");
+        const mistakeReason = normalizeMistakeReason(this.extractTag(text, "mistake_reason"));
 
         // Basic Validation
         if (!questionText || !answerText || !analysis) {
@@ -144,7 +151,18 @@ export class GeminiProvider implements AIService {
             mistakeStatus,
             subject,
             knowledgePoints,
-            requiresImage
+            requiresImage,
+            examType: normalizeExamType(this.extractTag(text, "exam_type")),
+            subjectModule: normalizeSubjectModule(this.extractTag(text, "subject_module")),
+            questionType: this.extractTag(text, "question_type") || "",
+            options: parseOptionsText(this.extractTag(text, "options")),
+            mistakeReason,
+            aiMistakeReasonSuggestion: mistakeReason,
+            fastestSolution: this.extractTag(text, "fastest_solution") || "",
+            trapAnalysis: this.extractTag(text, "trap_analysis") || "",
+            nextReviewTip: this.extractTag(text, "next_review_tip") || "",
+            similarQuestionMethod: this.extractTag(text, "similar_question_method") || "",
+            masteryStatus: "未复盘",
         };
 
         // Final Schema Validation
@@ -161,20 +179,11 @@ export class GeminiProvider implements AIService {
     async analyzeImage(imageBase64: string, mimeType: string = "image/jpeg", language: 'zh' | 'en' = 'zh', grade?: 7 | 8 | 9 | 10 | 11 | 12 | null, subject?: string | null, gradeSemester?: string | null): Promise<ParsedQuestion> {
         const config = getAppConfig();
 
-        // 从数据库获取各学科标签
-        const prefetchedMathTags = (subject === '数学' || !subject) ? await getMathTagsFromDB(grade || null) : [];
-        const prefetchedPhysicsTags = (subject === '物理' || !subject) ? await getTagsFromDB('physics') : [];
-        const prefetchedChemistryTags = (subject === '化学' || !subject) ? await getTagsFromDB('chemistry') : [];
-        const prefetchedBiologyTags = (subject === '生物' || !subject) ? await getTagsFromDB('biology') : [];
-        const prefetchedEnglishTags = (subject === '英语' || !subject) ? await getTagsFromDB('english') : [];
+        const civilServiceTags = await getCivilServiceTagsFromDB(subject);
 
         const prompt = generateAnalyzePrompt(language, grade, subject, {
             customTemplate: config.prompts?.analyze,
-            prefetchedMathTags,
-            prefetchedPhysicsTags,
-            prefetchedChemistryTags,
-            prefetchedBiologyTags,
-            prefetchedEnglishTags,
+            additionalTags: civilServiceTags,
         }, gradeSemester);
 
         logger.box('🔍 AI Image Analysis Request', {
@@ -339,10 +348,29 @@ export class GeminiProvider implements AIService {
                 this.extractTag(text, "mistake_status"),
                 wrongAnswerText
             );
+            const mistakeReason = normalizeMistakeReason(this.extractTag(text, "mistake_reason"));
 
             logger.info('Reanswer parsed successfully');
 
-            return { answerText, analysis, knowledgePoints: knowledgePointsParsed, wrongAnswerText, mistakeAnalysis, mistakeStatus };
+            return {
+                answerText,
+                analysis,
+                knowledgePoints: knowledgePointsParsed,
+                wrongAnswerText,
+                mistakeAnalysis,
+                mistakeStatus,
+                examType: normalizeExamType(this.extractTag(text, "exam_type")),
+                subjectModule: normalizeSubjectModule(this.extractTag(text, "subject_module")),
+                questionType: this.extractTag(text, "question_type") || "",
+                options: parseOptionsText(this.extractTag(text, "options")),
+                mistakeReason,
+                aiMistakeReasonSuggestion: mistakeReason,
+                fastestSolution: this.extractTag(text, "fastest_solution") || "",
+                trapAnalysis: this.extractTag(text, "trap_analysis") || "",
+                nextReviewTip: this.extractTag(text, "next_review_tip") || "",
+                similarQuestionMethod: this.extractTag(text, "similar_question_method") || "",
+                masteryStatus: "未复盘",
+            };
 
         } catch (error) {
             logger.error({ error, stack: error instanceof Error ? error.stack : undefined }, 'Error during reanswer');

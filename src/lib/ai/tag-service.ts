@@ -5,121 +5,61 @@
 
 import { prisma } from '@/lib/prisma';
 import { createLogger } from '@/lib/logger';
+import {
+    CIVIL_SERVICE_STANDARD_TAG_GROUPS,
+    CIVIL_SERVICE_SUBJECT_MODULES,
+    normalizeKnowledgeTagSubject,
+    type CivilServiceSubjectModule,
+} from '@/lib/civil-service';
 
 const logger = createLogger('ai:tag-service');
 
-interface TagTreeNode {
-    id: string;
-    name: string;
-    parentId: string | null;
-    children?: TagTreeNode[];
+export interface CivilServiceTagList {
+    subject: CivilServiceSubjectModule;
+    tags: string[];
 }
 
 /**
- * 从数据库获取指定年级的数学标签
- * @param grade - 年级 (7-9:初中, 10-12:高中) 或 null
- * @returns 标签名称数组
+ * 从数据库获取考公/考编标签；数据库未初始化时回退到代码内置标准库。
+ */
+export async function getCivilServiceTagsFromDB(subject?: string | null): Promise<CivilServiceTagList[]> {
+    const modules = subject
+        ? [normalizeKnowledgeTagSubject(subject)]
+        : [...CIVIL_SERVICE_SUBJECT_MODULES];
+
+    const results: CivilServiceTagList[] = [];
+    for (const module of modules) {
+        const dbTags = await getTagsFromDB(module);
+        results.push({
+            subject: module,
+            tags: dbTags.length > 0
+                ? dbTags
+                : CIVIL_SERVICE_STANDARD_TAG_GROUPS[module].flatMap(group => group.tags),
+        });
+    }
+    return results;
+}
+
+/**
+ * 旧接口兼容：数学标签在考公/考编语境下对应数量关系。
  */
 export async function getMathTagsFromDB(grade: 7 | 8 | 9 | 10 | 11 | 12 | null): Promise<string[]> {
-    const gradeToSemesterMap: Record<number, string[]> = {
-        7: ['七年级上', '七年级下'],
-        8: ['八年级上', '八年级下'],
-        9: ['九年级上', '九年级下'],
-        10: ['高一上', '高一下'],
-        11: ['高二上', '高二下'],
-        12: ['高三上', '高三下'],
-    };
-
-    // 确定要查询的年级学期
-    let semesterNames: string[] = [];
-
-    if (!grade) {
-        // 无年级信息，返回所有标签
-        semesterNames = Object.values(gradeToSemesterMap).flat();
-    } else if (grade >= 7 && grade <= 9) {
-        // 初中累进式：当前年级及之前
-        for (let g = 7; g <= grade; g++) {
-            semesterNames.push(...(gradeToSemesterMap[g] || []));
-        }
-    } else {
-        // 高中累进式：从高一开始
-        for (let g = 10; g <= grade; g++) {
-            semesterNames.push(...(gradeToSemesterMap[g] || []));
-        }
-    }
-
-    try {
-        // 获取所有顶层节点（年级学期）
-        const topLevelTags = await prisma.knowledgeTag.findMany({
-            where: {
-                subject: 'math',
-                parentId: null,
-                name: { in: semesterNames },
-            },
-            select: { id: true },
-        });
-
-        const topLevelIds = topLevelTags.map(t => t.id);
-
-        // 递归获取所有叶子节点标签
-        const allTags = await prisma.knowledgeTag.findMany({
-            where: {
-                subject: 'math',
-                isSystem: true,
-            },
-            select: {
-                id: true,
-                name: true,
-                parentId: true,
-            },
-        });
-
-        // 构建父子关系映射
-        const childMap = new Map<string, string[]>();
-        allTags.forEach(tag => {
-            if (tag.parentId) {
-                const children = childMap.get(tag.parentId) || [];
-                children.push(tag.id);
-                childMap.set(tag.parentId, children);
-            }
-        });
-
-        // 递归收集所有后代ID
-        const collectDescendants = (nodeId: string): string[] => {
-            const children = childMap.get(nodeId) || [];
-            if (children.length === 0) return [nodeId]; // 叶子节点
-            return children.flatMap(cid => collectDescendants(cid));
-        };
-
-        // 收集所有目标年级的叶子节点
-        const leafIds = new Set<string>();
-        topLevelIds.forEach(id => {
-            collectDescendants(id).forEach(leafId => leafIds.add(leafId));
-        });
-
-        // 获取叶子节点名称
-        const tagNameMap = new Map(allTags.map(t => [t.id, t.name]));
-        const result = Array.from(leafIds)
-            .map(id => tagNameMap.get(id))
-            .filter((name): name is string => !!name);
-
-        return result;
-    } catch (error) {
-        logger.error({ error }, 'getMathTagsFromDB error');
-        return [];
-    }
+    void grade;
+    const result = await getCivilServiceTagsFromDB('数量关系');
+    return result[0]?.tags || [];
 }
 
 /**
- * 从数据库获取指定学科的标签
- * @param subject - 学科 (math, physics, chemistry, english, etc.)
+ * 从数据库获取指定科目模块的标签，兼容旧学科 key。
+ * @param subject - 科目模块或旧学科 key
  * @returns 标签名称数组
  */
 export async function getTagsFromDB(subject: string): Promise<string[]> {
     try {
+        const normalizedSubject = normalizeKnowledgeTagSubject(subject);
         const tags = await prisma.knowledgeTag.findMany({
             where: {
-                subject,
+                subject: normalizedSubject,
                 isSystem: true,
                 // 只获取叶子节点
                 children: { none: {} },

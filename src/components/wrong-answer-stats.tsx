@@ -4,19 +4,32 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 
-import { Loader2, TrendingUp, CheckCircle, BookOpen } from "lucide-react";
+import { Loader2, TrendingUp, CheckCircle, BookOpen, CalendarCheck, RotateCcw, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiClient } from "@/lib/api-client";
 import { AnalyticsData } from "@/types/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+type TooltipPayload = {
+    value: number;
+};
+
+type ChartTooltipProps = {
+    active?: boolean;
+    payload?: TooltipPayload[];
+    label?: string;
+};
 
 export function WrongAnswerStats() {
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
-    const { t, language } = useLanguage();
+    const { t } = useLanguage();
 
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
         if (active && payload && payload.length) {
             return (
                 <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
@@ -63,7 +76,7 @@ export function WrongAnswerStats() {
                 {t.wrongAnswerStats.title}
             </h2>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">{t.wrongAnswerStats.totalErrors}</CardTitle>
@@ -100,6 +113,51 @@ export function WrongAnswerStats() {
                         </p>
                     </CardContent>
                 </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">本周新增</CardTitle>
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{data.weeklyNewCount ?? 0}</div>
+                        <p className="text-xs text-muted-foreground">本周录入错题数</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">本周复盘</CardTitle>
+                        <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{data.weeklyReviewCompletedCount ?? 0}</div>
+                        <p className="text-xs text-muted-foreground">已完成二刷/复盘</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">二刷正确率</CardTitle>
+                        <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{data.secondReviewCorrectRate ?? "0.0"}%</div>
+                        <p className="text-xs text-muted-foreground">第 7 天复盘正确率</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+                <Link href="/reviews">
+                    <Button variant="outline">
+                        <CalendarCheck className="mr-2 h-4 w-4" />
+                        待复盘
+                    </Button>
+                </Link>
+                <Link href="/weekly-report">
+                    <Button variant="outline">
+                        <TrendingUp className="mr-2 h-4 w-4" />
+                        周报复盘
+                    </Button>
+                </Link>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -171,6 +229,63 @@ export function WrongAnswerStats() {
                                 />
                             </BarChart>
                         </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>错题最多模块 TOP 5</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {(data.moduleTop5 || []).map(item => (
+                            <div key={item.name} className="flex items-center justify-between text-sm">
+                                <span>{item.name}</span>
+                                <Badge variant="secondary">{item.value}</Badge>
+                            </div>
+                        ))}
+                        {(!data.moduleTop5 || data.moduleTop5.length === 0) && (
+                            <p className="text-sm text-muted-foreground">暂无模块数据</p>
+                        )}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>错因最多 TOP 5</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {(data.mistakeReasonTop5 || []).map(item => (
+                            <div key={item.name} className="flex items-center justify-between text-sm">
+                                <span>{item.name}</span>
+                                <Badge variant="secondary">{item.value}</Badge>
+                            </div>
+                        ))}
+                        {(!data.mistakeReasonTop5 || data.mistakeReasonTop5.length === 0) && (
+                            <p className="text-sm text-muted-foreground">暂无错因数据</p>
+                        )}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            长期易错题
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {(data.longTermDifficultItems || []).slice(0, 5).map(item => (
+                            <Link key={item.id} href={`/error-items/${item.id}`} className="block rounded-md border p-3 hover:bg-muted">
+                                <div className="line-clamp-2 text-sm">{item.questionText || "未命名错题"}</div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    <Badge variant="outline">{item.subjectModule || "其他"}</Badge>
+                                    <Badge variant="destructive">{item.mistakeReason || "其他"}</Badge>
+                                </div>
+                            </Link>
+                        ))}
+                        {(!data.longTermDifficultItems || data.longTermDifficultItems.length === 0) && (
+                            <p className="text-sm text-muted-foreground">暂无长期易错题</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>

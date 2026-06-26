@@ -30,6 +30,7 @@ export async function GET(
                 role: true,
                 isActive: true,
                 createdAt: true,
+                examType: true,
                 educationStage: true,
                 enrollmentYear: true,
             }
@@ -86,7 +87,7 @@ export async function GET(
             mastered: masteryStats.find(m => m.masteryLevel === 2)?._count.id || 0,
         }
 
-        // 学科错题分布（按 subjectId 分组）
+        // 错题本分布（按 subjectId 分组）
         const subjectErrorCounts = await prisma.errorItem.groupBy({
             by: ['subjectId'],
             where: { userId: id },

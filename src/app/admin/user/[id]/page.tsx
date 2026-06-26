@@ -192,13 +192,13 @@ export default function AdminUserDetailPage() {
                 </Card>
             </div>
 
-            {/* Subject Distribution */}
+            {/* Notebook Distribution */}
             {data.subjectDistribution.length > 0 && (
                 <Card className="border-0 shadow-sm">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2">
                             <Tag className="h-4 w-4 text-blue-500" />
-                            {t.admin?.dashboard?.subjectDistribution || "学科错题分布"}
+                            {t.admin?.dashboard?.subjectDistribution || "错题本分布"}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>

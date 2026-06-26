@@ -47,26 +47,28 @@ describe('AI Prompts', () => {
             expect(typeof prompt).toBe('string');
         });
 
-        it('应该包含学科提示（如果提供）', () => {
+        it('不应把旧学科提示注入分析提示词', () => {
             const prompt = generateAnalyzePrompt('zh', null, '数学');
-            expect(prompt).toContain('数学');
+            expect(prompt).not.toContain('数学');
+            expect(prompt).not.toContain('学科');
         });
 
-        it('应该根据年级过滤数学标签（初一）', () => {
+        it('应忽略旧年级参数并保持分析提示词可生成（初一兼容输入）', () => {
             const prompt = generateAnalyzePrompt('zh', 7, '数学');
-            // 初一应该只包含七年级的标签
             expect(prompt).toBeDefined();
+            expect(prompt).not.toContain('年级');
         });
 
-        it('应该根据年级过滤数学标签（初三）', () => {
+        it('应忽略旧年级参数并保持分析提示词可生成（初三兼容输入）', () => {
             const prompt = generateAnalyzePrompt('zh', 9, '数学');
-            // 初三应该包含七、八、九年级的累进标签
             expect(prompt).toBeDefined();
+            expect(prompt).not.toContain('年级');
         });
 
-        it('应该根据年级过滤数学标签（高一）', () => {
+        it('应忽略旧年级参数并保持分析提示词可生成（高一兼容输入）', () => {
             const prompt = generateAnalyzePrompt('zh', 10, '数学');
             expect(prompt).toBeDefined();
+            expect(prompt).not.toContain('年级');
         });
 
         it('应该支持自定义选项 (providerHints)', () => {
@@ -102,6 +104,52 @@ describe('AI Prompts', () => {
             expect(prompt).toContain('wrong_attempt');
             expect(prompt).toContain('not_attempted');
             expect(prompt).toContain('unknown');
+        });
+
+        it('应该要求 AI 输出考公/考编结构化字段', () => {
+            const prompt = generateAnalyzePrompt('zh', null, '数学');
+            expect(prompt).toContain('<exam_type>');
+            expect(prompt).toContain('<subject_module>');
+            expect(prompt).toContain('<question_type>');
+            expect(prompt).toContain('<options>');
+            expect(prompt).toContain('<mistake_reason>');
+            expect(prompt).toContain('<fastest_solution>');
+            expect(prompt).toContain('<trap_analysis>');
+            expect(prompt).toContain('<next_review_tip>');
+            expect(prompt).toContain('<similar_question_method>');
+            expect(prompt).toContain('国考');
+            expect(prompt).toContain('事业编');
+            expect(prompt).toContain('资料分析');
+            expect(prompt).toContain('审题错误');
+        });
+
+        it('默认分析模板应面向行测/职测/公基错题复盘', () => {
+            const prompt = generateAnalyzePrompt('zh');
+            expect(prompt).toContain('考公/考编 AI 错题复盘教练');
+            expect(prompt).toContain('行测');
+            expect(prompt).toContain('职测');
+            expect(prompt).toContain('公基');
+            expect(prompt).toContain('错因分类');
+            expect(prompt).toContain('最快解法');
+            expect(prompt).toContain('同类题识别');
+            expect(prompt).not.toContain('跨学科考试分析专家');
+            expect(prompt).not.toContain('K12');
+        });
+
+        it('默认分析提示词不应包含 K12 学科化残留', () => {
+            const prompt = generateAnalyzePrompt('zh', 8, '数学', undefined, '初二上');
+            const forbiddenWords = ['学科', '数学', '物理', '化学', 'K12', '学生', '教师', '学历约束', '年级', '超纲知识'];
+
+            forbiddenWords.forEach(word => {
+                expect(prompt).not.toContain(word);
+            });
+
+            expect(prompt).toContain('<subject>');
+            expect(prompt).toContain('<subject_module>');
+            expect(prompt).toContain('<exam_type>');
+            expect(prompt).toContain('<mistake_reason>');
+            expect(prompt).toContain('<fastest_solution>');
+            expect(prompt).toContain('<similar_question_method>');
         });
     });
 
@@ -149,6 +197,29 @@ describe('AI Prompts', () => {
             const prompt = generateSimilarQuestionPrompt('zh', originalQuestion, knowledgePoints);
             expect(prompt.toUpperCase()).toContain('MEDIUM');
         });
+
+        it('默认举一反三模板应生成考公/考编同类题训练', () => {
+            const prompt = generateSimilarQuestionPrompt('zh', originalQuestion, knowledgePoints);
+            expect(prompt).toContain('考公/考编同类题训练生成专家');
+            expect(prompt).toContain('同模块');
+            expect(prompt).toContain('同题型');
+            expect(prompt).toContain('同考点');
+            expect(prompt).toContain('同解法路径');
+            expect(prompt).toContain('<question_text>');
+            expect(prompt).toContain('<answer_text>');
+            expect(prompt).toContain('<analysis>');
+            expect(prompt).not.toContain('K12教育题目生成专家');
+            expect(prompt).not.toContain('精通K12阶段所有学科');
+        });
+
+        it('默认举一反三提示词不应包含 K12 学科化残留', () => {
+            const prompt = generateSimilarQuestionPrompt('zh', originalQuestion, knowledgePoints, 'medium', undefined, 'primary_3');
+            const forbiddenWords = ['学科', '物理', '化学', 'K12', '学生', '教师', '学历约束', '年级', '超纲知识'];
+
+            forbiddenWords.forEach(word => {
+                expect(prompt).not.toContain(word);
+            });
+        });
     });
 
     describe('generateReanswerPrompt', () => {
@@ -166,9 +237,10 @@ describe('AI Prompts', () => {
             expect(prompt).toContain('English');
         });
 
-        it('应该包含学科提示（如果提供）', () => {
+        it('不应把旧学科提示注入重新解题提示词', () => {
             const prompt = generateReanswerPrompt('zh', questionText, '数学');
-            expect(prompt).toContain('数学');
+            expect(prompt).not.toContain('数学');
+            expect(prompt).not.toContain('学科提示');
         });
 
         it('应该支持自定义 provider hints', () => {
@@ -198,6 +270,19 @@ describe('AI Prompts', () => {
             expect(prompt).not.toContain('推断');
             expect(prompt).toContain('不要猜测');
             expect(prompt).toContain('当前图片中可见');
+        });
+
+        it('默认重新解题提示词不应包含 K12 学科化残留', () => {
+            const prompt = generateReanswerPrompt('zh', questionText, '数学', undefined, '高一');
+            const forbiddenWords = ['学科', '数学', '物理', '化学', 'K12', '学生', '教师', '学历约束', '年级', '超纲知识'];
+
+            forbiddenWords.forEach(word => {
+                expect(prompt).not.toContain(word);
+            });
+
+            expect(prompt).toContain('<subject_module>');
+            expect(prompt).toContain('<mistake_reason>');
+            expect(prompt).toContain('<fastest_solution>');
         });
     });
 
@@ -294,11 +379,9 @@ describe('AI Prompts', () => {
             expect(generateGradeInstruction('')).toBe('');
         });
 
-        it('有效的 gradeSemester 应生成约束指令', () => {
+        it('有效的 gradeSemester 也不再生成约束指令', () => {
             const instruction = generateGradeInstruction('初二上');
-            expect(instruction).toContain('学历约束');
-            expect(instruction).toContain('初中二年级');
-            expect(instruction).toContain('禁止使用超纲知识');
+            expect(instruction).toBe('');
         });
 
         it('无法识别的 gradeSemester 应返回空字符串', () => {
@@ -307,10 +390,10 @@ describe('AI Prompts', () => {
     });
 
     describe('gradeSemester 学历约束注入', () => {
-        it('analyze 提示词应包含学历约束（当提供 gradeSemester 时）', () => {
+        it('analyze 提示词不应包含学历约束（即使提供 gradeSemester）', () => {
             const prompt = generateAnalyzePrompt('zh', 8, '数学', undefined, '初二上');
-            expect(prompt).toContain('学历约束');
-            expect(prompt).toContain('初中二年级');
+            expect(prompt).not.toContain('学历约束');
+            expect(prompt).not.toContain('初中二年级');
         });
 
         it('analyze 提示词不应包含学历约束（当未提供 gradeSemester 时）', () => {
@@ -318,10 +401,10 @@ describe('AI Prompts', () => {
             expect(prompt).not.toContain('学历约束');
         });
 
-        it('similar 提示词应包含学历约束（当提供 gradeSemester 时）', () => {
+        it('similar 提示词不应包含学历约束（即使提供 gradeSemester）', () => {
             const prompt = generateSimilarQuestionPrompt('zh', '1+1=?', ['算术'], 'medium', undefined, 'primary_3');
-            expect(prompt).toContain('学历约束');
-            expect(prompt).toContain('小学三年级');
+            expect(prompt).not.toContain('学历约束');
+            expect(prompt).not.toContain('小学三年级');
         });
 
         it('similar 提示词不应包含学历约束（当未提供 gradeSemester 时）', () => {
@@ -329,10 +412,10 @@ describe('AI Prompts', () => {
             expect(prompt).not.toContain('学历约束');
         });
 
-        it('reanswer 提示词应包含学历约束（当提供 gradeSemester 时）', () => {
+        it('reanswer 提示词不应包含学历约束（即使提供 gradeSemester）', () => {
             const prompt = generateReanswerPrompt('zh', '1+1=?', '数学', undefined, '高一');
-            expect(prompt).toContain('学历约束');
-            expect(prompt).toContain('高中一年级');
+            expect(prompt).not.toContain('学历约束');
+            expect(prompt).not.toContain('高中一年级');
         });
 
         it('reanswer 提示词不应包含学历约束（当未提供 gradeSemester 时）', () => {

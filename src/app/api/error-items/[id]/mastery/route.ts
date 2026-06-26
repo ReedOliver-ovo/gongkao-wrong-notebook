@@ -48,6 +48,7 @@ export async function PATCH(
             },
             data: {
                 masteryLevel,
+                masteryStatus: masteryLevel > 0 ? "已掌握" : "未复盘",
             },
         });
 

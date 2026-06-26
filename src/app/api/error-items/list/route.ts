@@ -15,9 +15,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const subjectId = searchParams.get("subjectId");
     const query = searchParams.get("query");
-    const mastery = searchParams.get("mastery");
-    const timeRange = searchParams.get("timeRange");
-    const tag = searchParams.get("tag");
+        const mastery = searchParams.get("mastery");
+        const masteryStatus = searchParams.get("masteryStatus");
+        const subjectModule = searchParams.get("subjectModule");
+        const mistakeReason = searchParams.get("mistakeReason");
+        const timeRange = searchParams.get("timeRange");
+        const tag = searchParams.get("tag");
 
     // 分页参数
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -63,6 +66,15 @@ export async function GET(req: Request) {
         // Mastery filter
         if (mastery !== null) {
             whereClause.masteryLevel = mastery === "1" ? { gt: 0 } : 0;
+        }
+        if (masteryStatus && masteryStatus !== "all") {
+            whereClause.masteryStatus = masteryStatus;
+        }
+        if (subjectModule && subjectModule !== "all") {
+            whereClause.subjectModule = subjectModule;
+        }
+        if (mistakeReason && mistakeReason !== "all") {
+            whereClause.mistakeReason = mistakeReason;
         }
 
         // Time range filter

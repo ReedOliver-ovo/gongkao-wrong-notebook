@@ -306,14 +306,7 @@ function HomeContent() {
                 ? notebooks.find(n => n.id === targetNotebookId)
                 : undefined;
 
-            const result = await apiClient.post<{
-                answerText: string;
-                analysis: string;
-                knowledgePoints: string[];
-                wrongAnswerText: string;
-                mistakeAnalysis: string;
-                mistakeStatus: string;
-            }>("/api/reanswer", {
+            const result = await apiClient.post<Partial<ParsedQuestion>>("/api/reanswer", {
                 questionText,
                 language,
                 subject: matchedNotebook?.name || undefined,
@@ -324,14 +317,25 @@ function HomeContent() {
 
             const parsed: ParsedQuestion = {
                 questionText,
-                answerText: result.answerText,
-                analysis: result.analysis,
+                answerText: result.answerText || "",
+                analysis: result.analysis || "",
                 knowledgePoints: result.knowledgePoints || [],
                 wrongAnswerText: result.wrongAnswerText || "",
                 mistakeAnalysis: result.mistakeAnalysis || "",
                 mistakeStatus: (result.mistakeStatus as any) || "unknown",
                 subject: "数学", // Default, will be overridden by notebook selection
                 requiresImage: false,
+                examType: result.examType || "省考",
+                subjectModule: result.subjectModule || "其他",
+                questionType: result.questionType || "",
+                options: result.options || [],
+                mistakeReason: result.mistakeReason || "其他",
+                aiMistakeReasonSuggestion: result.aiMistakeReasonSuggestion || result.mistakeReason || "其他",
+                fastestSolution: result.fastestSolution || "",
+                trapAnalysis: result.trapAnalysis || "",
+                nextReviewTip: result.nextReviewTip || "",
+                similarQuestionMethod: result.similarQuestionMethod || "",
+                masteryStatus: result.masteryStatus || "未复盘",
             };
 
             setCurrentImage(null); // No image for text input
@@ -378,6 +382,10 @@ function HomeContent() {
         subjectId: string;
         gradeSemester?: string;
         paperLevel?: string;
+        examType?: string;
+        subjectModule?: string;
+        questionType?: string;
+        mistakeReason?: string;
     }): Promise<void> => {
         frontendLogger.info('[HomeDirectSave]', 'Starting direct save', {
             hasQuestionText: !!data.questionText,
@@ -398,6 +406,10 @@ function HomeContent() {
                 subjectId: data.subjectId,
                 gradeSemester: data.gradeSemester,
                 paperLevel: data.paperLevel,
+                examType: data.examType,
+                subjectModule: data.subjectModule,
+                questionType: data.questionType,
+                mistakeReason: data.mistakeReason,
                 originalImageUrl: "",
             });
 

@@ -15,6 +15,17 @@ export interface ReanswerQuestionResult {
     wrongAnswerText: string;
     mistakeAnalysis: string;
     mistakeStatus: MistakeStatus;
+    examType?: string;
+    subjectModule?: string;
+    questionType?: string;
+    options?: string[];
+    mistakeReason?: string;
+    aiMistakeReasonSuggestion?: string;
+    fastestSolution?: string;
+    trapAnalysis?: string;
+    nextReviewTip?: string;
+    similarQuestionMethod?: string;
+    masteryStatus?: string;
 }
 
 export interface GeogebraAnalysisResult {

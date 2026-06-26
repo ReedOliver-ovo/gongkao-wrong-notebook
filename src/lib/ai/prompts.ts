@@ -87,11 +87,8 @@ export function gradeSemesterToDisplayName(gradeSemester: string): string | null
  * @returns 约束指令字符串，无学历信息时返回空字符串
  */
 export function generateGradeInstruction(gradeSemester?: string | null): string {
-  if (!gradeSemester) return '';
-  const displayName = gradeSemesterToDisplayName(gradeSemester);
-  if (!displayName) return '';
-
-  return `\n【学历约束】\n本题目标年级：${displayName}\n请严格使用该年级课程标准范围内的方法解答，禁止使用超纲知识。\n`;
+  void gradeSemester;
+  return '';
 }
 
 /**
@@ -99,12 +96,13 @@ export function generateGradeInstruction(gradeSemester?: string | null): string 
  */
 export interface PromptOptions {
   providerHints?: string; // Provider-specific instructions
+  customTemplate?: string; // Custom template to override default
+  // Pre-fetched civil-service tags from database (optional, per module)
   additionalTags?: {
     subject: string;
     tags: string[];
   }[];
-  customTemplate?: string; // Custom template to override default
-  // Pre-fetched tags from database (optional, per subject)
+  // Legacy options kept for compatibility with older tests/callers.
   prefetchedMathTags?: string[];
   prefetchedPhysicsTags?: string[];
   prefetchedChemistryTags?: string[];
@@ -113,29 +111,50 @@ export interface PromptOptions {
 }
 
 export const DEFAULT_ANALYZE_TEMPLATE = `【角色与核心任务 (ROLE AND CORE TASK)】
-你是一位世界顶尖的、经验丰富的、专业的跨学科考试分析专家（Interdisciplinary Exam Analysis Expert）。你的核心任务是极致准确地分析用户提供的考试题目图片，全面理解所有文本、图表和隐含约束，并提供一个完整、高度结构化且专业的解决方案。
+你是一位考公/考编 AI 错题复盘教练，长期负责行测、职测、公基等客观题训练复盘。你的核心任务是极致准确地识别用户上传的错题截图，完整转录题干、选项、答案和解析，并输出可直接用于错题复盘、二刷提醒、模块统计和周报分析的结构化内容。
+
+【场景定位】
+- 默认服务于国考、省考、事业编备考。
+- 优先识别行测/职测/公基题目，包括言语理解、判断推理、数量关系、资料分析、常识判断、公共基础知识、职业能力倾向测验、时政等模块。
+- 输出必须帮助用户快速完成：错题录入 -> 错因分类 -> 最快解法复盘 -> 易错陷阱记录 -> 下次做题提醒 -> 同类题识别。
 
 {{language_instruction}}
 
 【核心输出要求 (OUTPUT REQUIREMENTS)】
-你的响应输出**必须严格遵循以下自定义标签格式**。**严禁**使用 JSON 或 Markdown 代码块。**严禁**对 LaTeX 公式中的反斜杠进行二次转义（如 "\\frac" 是错误的，必须是 "\frac"）。
+你的响应输出**必须严格遵循以下自定义标签格式**。**严禁**使用 JSON 或 Markdown 代码块。**严禁**对 LaTeX 公式中的反斜杠进行二次转义（如 "\\\\frac" 是错误的，必须是 "\\frac"）。
 
 请严格按照以下结构输出内容：
 
 <subject>
-在此处填写学科，必须是以下之一："数学", "物理", "化学", "生物", "英语", "语文", "历史", "地理", "政治", "其他"。
+兼容旧系统字段。考公/考编题目固定填写 "其他"。
 </subject>
 
 <knowledge_points>
-在此处填写知识点，使用逗号分隔，例如：知识点1, 知识点2, 知识点3
+填写考公/考编知识点标签，使用逗号分隔，例如：增长率, 资料分析速算, 削弱加强, 主旨概括, 法律常识。每题最多 5 个，优先贴近题型和方法。
 </knowledge_points>
 
 <requires_image>
-判断这道题是否需要依赖图片才能正确解答。如果题目包含几何图形、函数图像、实验装置图、电路图等必须看图才能理解的内容，填写 true；如果只需要文字描述即可理解（如英语题、纯文字数学题），填写 false。
+判断这道题是否需要依赖图片才能正确解答。如果题目包含图形推理、资料图表、流程图、统计图或必须看图才能理解的材料，填写 true；如果只需要文字描述即可理解，填写 false。
 </requires_image>
 
+<exam_type>
+判断考试类型，必须填写以下之一："国考", "省考", "事业编"。无法判断时填写 "省考"。
+</exam_type>
+
+<subject_module>
+判断科目模块，必须填写以下之一："言语理解", "判断推理", "数量关系", "资料分析", "常识判断", "申论", "公共基础知识", "职业能力倾向测验", "时政", "其他"。
+</subject_module>
+
+<question_type>
+填写具体题型，例如：资料分析-增长率、判断推理-图形推理、言语理解-片段阅读。无法判断时留空。
+</question_type>
+
+<options>
+如果题目有选项，请逐行转录 A/B/C/D 等选项；如果没有选项，请留空。
+</options>
+
 <wrong_answer_text>
-如果图片中包含学生已经写出的错误解答、错误步骤、草稿或错误答案，请尽量按原样摘录；如果没有看到学生错误解答，请留空。
+如果图片中包含考生已经写出的错误解答、错误步骤、草稿或错误答案，请尽量按原样摘录；如果没有看到考生错误解答，请留空。
 </wrong_answer_text>
 
 <mistake_status>
@@ -146,8 +165,28 @@ export const DEFAULT_ANALYZE_TEMPLATE = `【角色与核心任务 (ROLE AND CORE
 如果图片中包含错误解答，请分析错误可能发生在哪一步、为什么错、导致了什么后果；如果没有错误解答，请留空。
 </mistake_analysis>
 
+<mistake_reason>
+给出最可能的错因分类，必须填写以下之一："知识点不会", "方法不熟", "审题错误", "计算错误", "时间不够", "选项干扰", "记忆不牢", "粗心", "其他"。这是 AI 错因分类建议，用户可以手动修改。
+</mistake_reason>
+
+<fastest_solution>
+给出本题最快解法，强调考公/考编场景下可复用、可快速执行的方法。
+</fastest_solution>
+
+<trap_analysis>
+说明本题易错陷阱，包括题干关键词、选项干扰、计算或审题误区。
+</trap_analysis>
+
+<next_review_tip>
+写给用户下次做同类题前要提醒自己的短句。
+</next_review_tip>
+
+<similar_question_method>
+说明如何识别同类题，包括典型题干特征、数据结构、问法或选项特征。
+</similar_question_method>
+
 <question_text>
-在此处填写题目的完整文本。使用 Markdown 格式。所有数学公式使用 LaTeX 符号（行内 $...$，块级 $$...$$）。
+在此处填写题目的完整文本。使用 Markdown 格式。所有公式、算式、比例、增长率等使用 LaTeX 符号（行内 $...$，块级 $$...$$）。
 
 【表格处理规则】
 如果图片中包含表格，必须完整转录表格内容，遵循以下原则：
@@ -172,7 +211,7 @@ export const DEFAULT_ANALYZE_TEMPLATE = `【角色与核心任务 (ROLE AND CORE
    - 必须转录所有单元格内容（包括空单元格用 - 或空格表示）
    - 保留表格标题、单位、注释
    - 保留数据的对齐关系和分组信息
-   - 表格中的数学公式使用 LaTeX 语法
+   - 表格中的公式、算式、比例、增长率等使用 LaTeX 语法
 
 4. **表格上下文**：
    - 如果表格有标题或编号（如"表1"），保留在表格前
@@ -192,7 +231,7 @@ export const DEFAULT_ANALYZE_TEMPLATE = `【角色与核心任务 (ROLE AND CORE
 <analysis>
 在此处填写详细的步骤解析。
 * 必须使用简体中文。
-* **直接使用标准的 LaTeX 符号**（如 $\frac{1}{2}$），**不要**进行 JSON 转义（不要写成 \\frac）。
+* **直接使用标准的 LaTeX 符号**（如 $\\frac{1}{2}$），**不要**进行 JSON 转义（不要写成 \\\\frac）。
 * 如果解析过程需要表格（如列表对比、分步计算表），遵循上述【表格处理规则】。
 </analysis>
 
@@ -200,11 +239,12 @@ export const DEFAULT_ANALYZE_TEMPLATE = `【角色与核心任务 (ROLE AND CORE
 {{knowledge_points_list}}
 
 【标签使用规则 (TAG RULES)】
-- 标签必须与题目实际考查的知识点精准匹配。
-- 每题最多 5 个标签。
+- 标签必须与题目实际考查的模块、题型、知识点或解法方法精准匹配。
+- 每题最多 5 个标签，优先选择考公/考编复盘价值最高的标签。
+- 如果标准标签不足，请根据题目自由生成更贴近行测/职测/公基的模块、题型或方法标签。
 
 【!!! 关键格式与内容约束 (CRITICAL RULES) !!!】
-1. **格式严格**：必须严格包含上述 9 个 XML 标签，除此之外不要输出任何其他“开场白”或“结束语”。
+1. **格式严格**：必须严格包含上述所有 XML 标签，除此之外不要输出任何其他“开场白”或“结束语”。
 2. **纯文本**：内容作为纯文本处理，**不要转义反斜杠**。
 3. **内容完整**：如果包含子问题，请在 question_text 中完整列出。
 4. **禁止图片**：严禁包含任何图片链接或 markdown 图片语法。
@@ -212,33 +252,36 @@ export const DEFAULT_ANALYZE_TEMPLATE = `【角色与核心任务 (ROLE AND CORE
 {{grade_instruction}}
 {{provider_hints}}`;
 
-export const DEFAULT_SIMILAR_TEMPLATE = `你是一位资深的K12教育题目生成专家，具备跨学科的题目创作能力。你的核心任务是**根据以下原题和知识点，举一反三生成高质量教学题目**，帮助学生巩固知识并拓展解题思路。
+export const DEFAULT_SIMILAR_TEMPLATE = `你是一位考公/考编同类题训练生成专家，专注行测、职测、公基客观题训练。你的核心任务是**根据原错题和知识点，生成一题可用于二刷后的同类训练题**，帮助用户判断是否真正掌握同模块、同题型、同考点、同解法路径。
 ### 角色定义
-1. **学科全能专家**  
-   - 精通K12阶段所有学科（数学/语文/英语/物理/化学/生物/历史/地理/政治）
-   - 熟悉各年级课程标准与知识点分布
-   - 能准确识别题目考察的核心能力点（计算/推理/分析/应用/创新）
-2. **题目变异大师**  
-   - 掌握12种变式技法：条件替换/情境迁移/问题转化/数据重构/图形变形/角色反转/跨学科融合/难度阶梯/开放拓展/陷阱设计/逆向思维/生活应用
-   - 确保变式题目保持原题核心考点，改变题目表现形式
-3. **学情分析师**  
-   - 预判学生易错点（认知盲区/概念混淆/计算失误/审题偏差）
-   - 在变式题目中针对性强化易错点训练
+1. **考公题型专家**
+   - 熟悉国考、省考、事业编常见题型与命题方式
+   - 能识别言语理解、判断推理、数量关系、资料分析、常识判断、公共基础知识、职业能力倾向测验、时政等模块
+   - 能保持题目考查能力一致，避免生成偏离公务员/事业编考试风格的题
+2. **同类题训练设计者**
+   - 新题必须与原题保持同模块、同题型、同考点、同解法路径
+   - 可以替换材料、数据、问法或选项干扰，但不能改变核心解题方法
+   - 优先设计选择题或客观题，便于快速练习和复盘
+3. **错因复盘教练**
+   - 针对审题错误、方法不熟、计算错误、选项干扰、时间不够等错因设置合理干扰
+   - 解析中说明最快解法、关键陷阱和同类题识别方法
 ### 执行流程
 1. **接收任务**  
 	原题: "{{original_question}}"
 	{{language_instruction}}
 	DIFFICULTY LEVEL: {{difficulty_level}}
 	{{difficulty_instruction}}
-	Knowledge Points: {{knowledge_points}}  
+	复盘标签/知识点标签: {{knowledge_points}}
 2. **解构分析**  
-   - 提取核心考点与能力要求
-   - 分析题目陷阱与解题路径
+   - 提取原题所属模块、具体题型、核心考点和最快解法
+   - 分析原题易错陷阱、选项干扰或计算负担
+   - 明确新题必须复用的同类题识别特征
 3.  **质量管控**  
-   - 确保每道题：  
-     ✓ 覆盖相同核心知识点  
-     ✓ 保持解题逻辑一致性  
-     ✓ 答案唯一且可验证  
+   - 确保每道题：
+     ✓ 保持同模块、同题型、同考点、同解法路径
+     ✓ 难度调整符合当前难度指令
+     ✓ 选项设置有区分度但不故意歧义
+     ✓ 答案唯一且可验证
      ✓ 无知识性错误
 ### 输出规范
 你的响应输出**必须严格遵循以下自定义标签格式**。**严禁**使用 JSON 或 Markdown 代码块。**严禁**返回 \`\`\`json ... \`\`\`。
@@ -246,7 +289,7 @@ export const DEFAULT_SIMILAR_TEMPLATE = `你是一位资深的K12教育题目生
 请严格按照以下结构输出内容（不要包含任何其他文字）：
 
 <question_text>
-在此处填写新生成的题目文本。包含选项（如果是选择题）。
+在此处填写新生成的考公/考编同类训练题文本。优先生成客观题，并包含完整选项（如果是选择题）。
 </question_text>
 
 <answer_text>
@@ -256,7 +299,8 @@ export const DEFAULT_SIMILAR_TEMPLATE = `你是一位资深的K12教育题目生
 <analysis>
 在此处填写新题目的详细解析。
 * 必须使用简体中文。
-* **直接使用标准的 LaTeX 符号**（如 $\frac{1}{2}$），**不要**进行 JSON 转义。
+* **直接使用标准的 LaTeX 符号**（如 $\\frac{1}{2}$），**不要**进行 JSON 转义。
+* 解析必须包含最快解法、关键陷阱、同类题识别方法。
 </analysis>
 
 ###关键格式与内容约束 (CRITICAL RULES) !!!
@@ -320,85 +364,21 @@ export function generateAnalyzePrompt(
   gradeSemester?: string | null
 ): string {
   const langInstruction = language === 'zh'
-    ? "IMPORTANT: For the 'analysis' field, use Simplified Chinese. For 'questionText' and 'answerText', YOU MUST USE THE SAME LANGUAGE AS THE ORIGINAL QUESTION. If the original question is in Chinese, the new question MUST be in Chinese. If the original is in English, keep it in English. If the original question is in English, the new 'questionText' and 'answerText' MUST be in English, but the 'analysis' MUST be in Simplified Chinese (to help the student understand). "
+    ? "IMPORTANT: For the 'analysis' field, use Simplified Chinese. For 'questionText' and 'answerText', YOU MUST USE THE SAME LANGUAGE AS THE ORIGINAL QUESTION. If the original question is in Chinese, the new question MUST be in Chinese. If the original is in English, keep it in English. If the original question is in English, the new 'questionText' and 'answerText' MUST be in English, but the 'analysis' MUST be in Simplified Chinese for review."
     : "Please ensure all text fields are in English.";
 
-  // 获取各学科标签（优先使用预获取的数据库标签）
-  const mathTags = getMathTagsForGrade(grade || null, options?.prefetchedMathTags);
-  const mathTagsString = mathTags.length > 0 ? mathTags.map(tag => `"${tag}"`).join(", ") : '（无可用标签）';
-
-  const physicsTags = options?.prefetchedPhysicsTags || [];
-  const physicsTagsString = physicsTags.length > 0 ? physicsTags.map(tag => `"${tag}"`).join(", ") : '（无可用标签）';
-
-  const chemistryTags = options?.prefetchedChemistryTags || [];
-  const chemistryTagsString = chemistryTags.length > 0 ? chemistryTags.map(tag => `"${tag}"`).join(", ") : '（无可用标签）';
-
-  const biologyTags = options?.prefetchedBiologyTags || [];
-  const biologyTagsString = biologyTags.length > 0 ? biologyTags.map(tag => `"${tag}"`).join(", ") : '（无可用标签）';
-
-  const englishTags = options?.prefetchedEnglishTags || [];
-  const englishTagsString = englishTags.length > 0 ? englishTags.map(tag => `"${tag}"`).join(", ") : '（无可用标签）';
-
-  // 根据科目决定显示哪些标签（节省 token，提高准确性）
-  let tagsSection = "";
-
-  if (subject === '数学') {
-    tagsSection = `**数学标签 (Math Tags):**
-使用人教版课程大纲中的**精确标签名称**，可选标签如下：
-${mathTagsString}
+  void grade;
+  void subject;
+  const moduleTags = options?.additionalTags || [];
+  const tagsSection = moduleTags.length > 0
+    ? `**可选考公/考编知识点标签：**
+${moduleTags.map(group => `${group.subject}: ${group.tags.map(tag => `"${tag}"`).join(", ")}`).join("\n")}
 
 **重要提示**：
-- 必须从上述列表中选择精确匹配的标签
-- 每题最多 5 个标签`;
-  } else if (subject === '物理') {
-    tagsSection = `**物理标签 (Physics Tags):**
-使用课程大纲中的**精确标签名称**，可选标签如下：
-${physicsTagsString}
-
-**重要提示**：
-- 必须从上述列表中选择精确匹配的标签
-- 每题最多 5 个标签`;
-  } else if (subject === '化学') {
-    tagsSection = `**化学标签 (Chemistry Tags):**
-使用课程大纲中的**精确标签名称**，可选标签如下：
-${chemistryTagsString}
-
-**重要提示**：
-- 必须从上述列表中选择精确匹配的标签
-- 每题最多 5 个标签`;
-  } else if (subject === '生物') {
-    tagsSection = `**生物标签 (Biology Tags):**
-使用课程大纲中的**精确标签名称**，可选标签如下：
-${biologyTagsString}
-
-**重要提示**：
-- 必须从上述列表中选择精确匹配的标签
-- 每题最多 5 个标签`;
-  } else if (subject === '英语') {
-    tagsSection = `**英语标签 (English Tags):**
-使用课程大纲中的**精确标签名称**，可选标签如下：
-${englishTagsString}
-
-**重要提示**：
-- 必须从上述列表中选择精确匹配的标签
-- 每题最多 5 个标签`;
-  } else {
-    // 未知科目：显示所有标签让 AI 判断
-    tagsSection = `**数学标签 (Math Tags):**
-${mathTagsString}
-
-**物理标签 (Physics Tags):**
-${physicsTagsString}
-
-**化学标签 (Chemistry Tags):**
-${chemistryTagsString}
-
-**生物标签 (Biology Tags):**
-${biologyTagsString}
-
-**英语标签 (English Tags):**
-${englishTagsString}`;
-  }
+- 优先输出行测/职测/公基复盘需要的模块、题型、方法标签
+- 每题最多 5 个标签`
+    : `**可选考公/考编知识点标签：**
+（当前无可用标准标签。请根据题目自由生成贴近行测/职测/公基的标签，每题最多 5 个。）`;
 
   const template = options?.customTemplate || DEFAULT_ANALYZE_TEMPLATE;
 
@@ -427,14 +407,14 @@ export function generateSimilarQuestionPrompt(
   gradeSemester?: string | null
 ): string {
   const langInstruction = language === 'zh'
-    ? "IMPORTANT: Provide the output based on the 'Original Question' language. If the original question is in English, the new 'questionText' and 'answerText' MUST be in English, but the 'analysis' MUST be in Simplified Chinese (to help the student understand). If the original is in Chinese, everything MUST be in Simplified Chinese."
+    ? "IMPORTANT: Provide the output based on the 'Original Question' language. If the original question is in English, the new 'questionText' and 'answerText' MUST be in English, but the 'analysis' MUST be in Simplified Chinese for review. If the original is in Chinese, everything MUST be in Simplified Chinese."
     : "Please ensure the generated question is in English.";
 
   const difficultyInstruction = {
-    'easy': "Make the new question EASIER than the original. Use simpler numbers and more direct concepts.",
-    'medium': "Keep the difficulty SIMILAR to the original question.",
-    'hard': "Make the new question HARDER than the original. Combine multiple concepts or use more complex numbers.",
-    'harder': "Make the new question MUCH HARDER (Challenge Level). Require deeper understanding and multi-step reasoning."
+    'easy': "降低干扰强度和计算量，保持同题型同解法，让用户先确认基本方法是否掌握。",
+    'medium': "保持与原题相近的材料复杂度、选项干扰和解题步数。",
+    'hard': "增加材料复杂度、选项干扰或多步推理，但仍保持同模块、同题型、同考点、同解法路径。",
+    'harder': "显著提高综合度或时间压力，可加入更隐蔽的条件、更多数据或更强干扰项，但答案必须唯一且可验证。"
   }[difficulty];
 
   const template = options?.customTemplate || DEFAULT_SIMILAR_TEMPLATE;
@@ -455,14 +435,14 @@ export function generateSimilarQuestionPrompt(
  * 用于根据校正后的题目文本重新生成答案和解析
  */
 export const DEFAULT_REANSWER_TEMPLATE = `【角色与核心任务 (ROLE AND CORE TASK)】
-你是一位经验丰富的专业教师。用户已经提供了一道**校正后的题目文本**，请你为这道题目提供正确的答案和详细的解析。
+你是一位考公/考编错题复盘教练。用户已经提供了一道**校正后的题目文本**，请你为这道题目提供正确答案、复盘解析、模块判断和二刷提示。
 
 {{language_instruction}}
 
 【题目内容 (QUESTION)】
 {{question_text}}
 
-【学科提示 (SUBJECT HINT)】
+【模块线索 (MODULE HINT)】
 {{subject_hint}}
 
 【核心输出要求 (OUTPUT REQUIREMENTS)】
@@ -478,27 +458,63 @@ export const DEFAULT_REANSWER_TEMPLATE = `【角色与核心任务 (ROLE AND COR
 在此处填写详细的步骤解析。
 * 必须使用简体中文。
 * **直接使用标准的 LaTeX 符号**（如 $\\frac{1}{2}$），**不要**进行 JSON 转义。
-* 解析要清晰、完整，适合学生理解。
+* 解析要清晰、完整，适合错题复盘和二刷训练。
 </analysis>
 
 <knowledge_points>
 在此处填写知识点，使用逗号分隔，例如：知识点1, 知识点2, 知识点3
 </knowledge_points>
 
+<exam_type>
+判断考试类型，只能填写：国考、省考、事业编。无法判断时填写省考。
+</exam_type>
+
+<subject_module>
+判断科目模块，只能填写：言语理解、判断推理、数量关系、资料分析、常识判断、申论、公共基础知识、职业能力倾向测验、时政、其他。
+</subject_module>
+
+<question_type>
+填写题型，例如：主旨概括、削弱加强、图形推理、工程问题、材料分析等；无法判断时留空。
+</question_type>
+
+<options>
+逐行填写题目选项，例如 A. ...、B. ...；没有选项时留空。
+</options>
+
 <wrong_answer_text>
-请只根据校正后的题目文本和当前图片中可见的学生作答痕迹重新判断学生错误解答。如果当前图片中可见错误解答、错误步骤、草稿或错误答案，请尽量按原样摘录；如果看不到学生作答痕迹，请留空，不要猜测。
+请只根据校正后的题目文本和当前图片中可见的考生作答痕迹重新判断考生错误解答。如果当前图片中可见错误解答、错误步骤、草稿或错误答案，请尽量按原样摘录；如果看不到考生作答痕迹，请留空，不要猜测。
 </wrong_answer_text>
 
 <mistake_status>
-重新判断并填写以下值之一：wrong_attempt（当前题目文本或当前图片中明确有错误解答或错误步骤）、not_attempted（当前图片明确显示未作答或空白）、unknown（看不到学生作答痕迹或无法判断）。不要猜测。
+重新判断并填写以下值之一：wrong_attempt（当前题目文本或当前图片中明确有错误解答或错误步骤）、not_attempted（当前图片明确显示未作答或空白）、unknown（看不到考生作答痕迹或无法判断）。不要猜测。
 </mistake_status>
 
 <mistake_analysis>
-请基于校正后的题目和当前图片中可见的学生作答痕迹重新判断错因。如果有可见错误解答，请分析错误可能发生在哪一步、为什么错、导致了什么后果；如果看不到学生作答痕迹或无法判断，请留空，不要猜测。
+请基于校正后的题目和当前图片中可见的考生作答痕迹重新判断错因。如果有可见错误解答，请分析错误可能发生在哪一步、为什么错、导致了什么后果；如果看不到考生作答痕迹或无法判断，请留空，不要猜测。
 </mistake_analysis>
 
+<mistake_reason>
+建议错因分类，只能填写：知识点不会、方法不熟、审题错误、计算错误、时间不够、选项干扰、记忆不牢、粗心、其他。
+</mistake_reason>
+
+<fastest_solution>
+给出这道题的最快解法或最省时间路径。
+</fastest_solution>
+
+<trap_analysis>
+指出最容易误判、误算或被选项干扰的陷阱。
+</trap_analysis>
+
+<next_review_tip>
+给出下次复盘时最应该提醒自己的短句。
+</next_review_tip>
+
+<similar_question_method>
+说明如何识别同类题。
+</similar_question_method>
+
 【!!! 关键格式与内容约束 (CRITICAL RULES) !!!】
-1. **格式严格**：必须严格包含上述 6 个 XML 标签，不要输出其他内容。
+1. **格式严格**：必须严格包含上述全部 XML 标签，不要输出其他内容。
 2. **纯文本**：内容作为纯文本处理，**不要转义反斜杠**。
 3. **题目不变**：不要修改或重复题目内容，只提供答案和解析。
 
@@ -614,7 +630,7 @@ export function generateGeogebraPrompt(
  * 生成重新解题提示词
  * @param language - 语言 ('zh' 或 'en')
  * @param questionText - 校正后的题目文本
- * @param subject - 学科提示（可选）
+ * @param subject - 旧兼容参数（可选，生成提示词时不直接暴露原值）
  * @param options - 自定义选项
  */
 export function generateReanswerPrompt(
@@ -628,9 +644,8 @@ export function generateReanswerPrompt(
     ? "IMPORTANT: 解析必须使用简体中文。如果题目是英文，答案保持英文，但解析用中文。"
     : "Please ensure all text fields are in English.";
 
-  const subjectHint = subject
-    ? `本题学科：${subject}`
-    : "请根据题目内容判断学科。";
+  void subject;
+  const subjectHint = "请根据题干、选项和解析判断考试类型、科目模块、题型和复盘标签。";
 
   const template = options?.customTemplate || DEFAULT_REANSWER_TEMPLATE;
 

@@ -3,12 +3,14 @@ import { hash } from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { getAppConfig } from "@/lib/config"
+import { normalizeExamType } from "@/lib/civil-service"
 
 const userSchema = z.object({
     // 支持标准邮箱和本地邮箱（如 user@localhost）
     email: z.string().regex(/^[^\s@]+@[^\s@]+$/, "Invalid email format"),
     password: z.string().min(6),
     name: z.string().min(1),
+    examType: z.string().optional(),
     educationStage: z.string().optional(),
     enrollmentYear: z.number().optional(),
 })
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
-        const { email, password, name, educationStage, enrollmentYear } = userSchema.parse(body)
+        const { email, password, name, examType } = userSchema.parse(body)
 
         const existingUser = await prisma.user.findUnique({
             where: { email }
@@ -44,8 +46,7 @@ export async function POST(req: Request) {
                 email,
                 name,
                 password: hashedPassword,
-                educationStage,
-                enrollmentYear
+                examType: normalizeExamType(examType),
             }
         })
 

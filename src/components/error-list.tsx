@@ -26,6 +26,11 @@ import { cleanMarkdown } from "@/lib/markdown-utils";
 import { Pagination } from "@/components/ui/pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants/pagination";
 import { getMistakeStatusLabel } from "@/lib/mistake-status";
+import {
+    CIVIL_SERVICE_MASTERY_STATUS,
+    CIVIL_SERVICE_MISTAKE_REASONS,
+    CIVIL_SERVICE_SUBJECT_MODULES,
+} from "@/lib/civil-service";
 
 interface ErrorListProps {
     subjectId?: string;
@@ -33,20 +38,19 @@ interface ErrorListProps {
 }
 
 type KnowledgeFilterChange = {
-    gradeSemester?: string;
-    chapter?: string;
     tag?: string | null;
 };
 
-export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
+export function ErrorList({ subjectId }: ErrorListProps = {}) {
     const [items, setItems] = useState<ErrorItem[]>([]);
     const [, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [masteryFilter, setMasteryFilter] = useState<"all" | "mastered" | "unmastered">("all");
     const [timeFilter, setTimeFilter] = useState<"all" | "week" | "month">("all");
-    const [gradeFilter, setGradeFilter] = useState("");
-    const [chapterFilter, setChapterFilter] = useState("");
     const [paperLevelFilter, setPaperLevelFilter] = useState<"all" | "a" | "b" | "other">("all");
+    const [masteryStatusFilter, setMasteryStatusFilter] = useState("all");
+    const [subjectModuleFilter, setSubjectModuleFilter] = useState("all");
+    const [mistakeReasonFilter, setMistakeReasonFilter] = useState("all");
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
     // 分页状态
@@ -74,9 +78,10 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
         if (selectedTag) {
             params.append("tag", selectedTag);
         }
-        if (gradeFilter) params.append("gradeSemester", gradeFilter);
-        if (chapterFilter) params.append("chapter", chapterFilter); // 章节筛选
         if (paperLevelFilter !== "all") params.append("paperLevel", paperLevelFilter);
+        if (masteryStatusFilter !== "all") params.append("masteryStatus", masteryStatusFilter);
+        if (subjectModuleFilter !== "all") params.append("subjectModule", subjectModuleFilter);
+        if (mistakeReasonFilter !== "all") params.append("mistakeReason", mistakeReasonFilter);
 
         router.push(`/print-preview?${params.toString()}`);
     };
@@ -85,28 +90,12 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
         setSelectedTag(selectedTag === tag ? null : tag);
     };
 
-    const handleFilterChange = ({ gradeSemester, chapter, tag }: KnowledgeFilterChange) => {
-        if (gradeSemester !== undefined) setGradeFilter(gradeSemester);
-        if (chapter !== undefined) setChapterFilter(chapter);
-        // 注意：tag 可能是 undefined（表示清除），需要用 'tag' in obj 来判断是否传入了该参数
-        // 但由于我们的结构是直接解构，这里改用 null 作为清除标识
-        // 实际上 KnowledgeFilter 传入的是 { tag: undefined }，所以 tag 参数确实会被设置
-        // 问题在于 !== undefined 不能区分"未传入"和"传入undefined"
-        // 正确的做法是检查参数对象中是否有该 key
-        setSelectedTag(tag === undefined ? null : tag);
-
-        // Clear dependent filters and reset page
-        if (!gradeSemester) {
-            setGradeFilter("");
-            setChapterFilter("");
-            setSelectedTag(null);
-        } else if (!chapter) {
-            setChapterFilter("");
-        }
+    const handleFilterChange = ({ tag }: KnowledgeFilterChange) => {
+        setSelectedTag(tag || null);
         setPage(1); // 筛选变化时重置页码
     };
 
-    // 使用服务端 items 直接渲染，章节过滤已在 KnowledgeFilter 中通过 tag 实现
+    // 使用服务端 items 直接渲染，标签过滤在服务端完成
     const filteredItems = items;
 
     const toggleTagsExpanded = (itemId: string, e: React.MouseEvent) => {
@@ -168,7 +157,17 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
     };
 
     // 追踪筛选条件是否变化（用于判断是否需要重置页码）
-    const prevFiltersRef = useRef({ search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter });
+    const prevFiltersRef = useRef({
+        search,
+        masteryFilter,
+        timeFilter,
+        selectedTag,
+        subjectId,
+        paperLevelFilter,
+        masteryStatusFilter,
+        subjectModuleFilter,
+        mistakeReasonFilter,
+    });
 
     useEffect(() => {
         const prevFilters = prevFiltersRef.current;
@@ -178,12 +177,23 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
             prevFilters.timeFilter !== timeFilter ||
             prevFilters.selectedTag !== selectedTag ||
             prevFilters.subjectId !== subjectId ||
-            prevFilters.gradeFilter !== gradeFilter ||
-            prevFilters.chapterFilter !== chapterFilter ||
-            prevFilters.paperLevelFilter !== paperLevelFilter;
+            prevFilters.paperLevelFilter !== paperLevelFilter ||
+            prevFilters.masteryStatusFilter !== masteryStatusFilter ||
+            prevFilters.subjectModuleFilter !== subjectModuleFilter ||
+            prevFilters.mistakeReasonFilter !== mistakeReasonFilter;
 
         // 更新 ref
-        prevFiltersRef.current = { search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter };
+        prevFiltersRef.current = {
+            search,
+            masteryFilter,
+            timeFilter,
+            selectedTag,
+            subjectId,
+            paperLevelFilter,
+            masteryStatusFilter,
+            subjectModuleFilter,
+            mistakeReasonFilter,
+        };
 
         if (filtersChanged && page !== 1) {
             // 筛选条件变化且不在第一页，重置到第一页（会再次触发此 effect）
@@ -193,7 +203,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
 
         // 正常请求数据
         fetchItems();
-    }, [page, search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter]);
+    }, [page, search, masteryFilter, timeFilter, selectedTag, subjectId, paperLevelFilter, masteryStatusFilter, subjectModuleFilter, mistakeReasonFilter]);
 
     const fetchItems = async () => {
         setLoading(true);
@@ -210,9 +220,10 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
             if (selectedTag) {
                 params.append("tag", selectedTag);
             }
-            if (gradeFilter) params.append("gradeSemester", gradeFilter);
-            if (chapterFilter) params.append("chapter", chapterFilter); // 章节筛选
             if (paperLevelFilter !== "all") params.append("paperLevel", paperLevelFilter);
+            if (masteryStatusFilter !== "all") params.append("masteryStatus", masteryStatusFilter);
+            if (subjectModuleFilter !== "all") params.append("subjectModule", subjectModuleFilter);
+            if (mistakeReasonFilter !== "all") params.append("mistakeReason", mistakeReasonFilter);
             // 分页参数
             params.append("page", page.toString());
             params.append("pageSize", pageSize.toString());
@@ -272,6 +283,42 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                         <DropdownMenuItem onClick={() => setTimeFilter("month")}>
                             {timeFilter === "month" && "✓ "}{t.filter.lastMonth || "Last Month"}
                         </DropdownMenuItem>
+
+                        <DropdownMenuSeparator />
+
+                        <DropdownMenuLabel>复盘状态</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setMasteryStatusFilter("all")}>
+                            {masteryStatusFilter === "all" && "✓ "}全部
+                        </DropdownMenuItem>
+                        {CIVIL_SERVICE_MASTERY_STATUS.map(value => (
+                            <DropdownMenuItem key={value} onClick={() => setMasteryStatusFilter(value)}>
+                                {masteryStatusFilter === value && "✓ "}{value}
+                            </DropdownMenuItem>
+                        ))}
+
+                        <DropdownMenuSeparator />
+
+                        <DropdownMenuLabel>科目模块</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setSubjectModuleFilter("all")}>
+                            {subjectModuleFilter === "all" && "✓ "}全部
+                        </DropdownMenuItem>
+                        {CIVIL_SERVICE_SUBJECT_MODULES.map(value => (
+                            <DropdownMenuItem key={value} onClick={() => setSubjectModuleFilter(value)}>
+                                {subjectModuleFilter === value && "✓ "}{value}
+                            </DropdownMenuItem>
+                        ))}
+
+                        <DropdownMenuSeparator />
+
+                        <DropdownMenuLabel>错因分类</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setMistakeReasonFilter("all")}>
+                            {mistakeReasonFilter === "all" && "✓ "}全部
+                        </DropdownMenuItem>
+                        {CIVIL_SERVICE_MISTAKE_REASONS.map(value => (
+                            <DropdownMenuItem key={value} onClick={() => setMistakeReasonFilter(value)}>
+                                {mistakeReasonFilter === value && "✓ "}{value}
+                            </DropdownMenuItem>
+                        ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="outline" onClick={handleExportPrint}>
@@ -291,10 +338,9 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
             <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
                 <div className="w-full sm:w-auto">
                     <KnowledgeFilter
-                        gradeSemester={gradeFilter}
                         tag={selectedTag}
+                        subjectModule={subjectModuleFilter}
                         onFilterChange={handleFilterChange}
-                        subjectName={subjectName}
                     />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -338,6 +384,27 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                         {selectedTag}
                         <span className="ml-1 text-xs">×</span>
                     </Badge>
+                </div>
+            )}
+
+            {(masteryStatusFilter !== "all" || subjectModuleFilter !== "all" || mistakeReasonFilter !== "all") && (
+                <div className="flex flex-wrap items-center gap-2 p-3 bg-muted rounded-lg">
+                    <span className="text-sm text-muted-foreground">当前考公筛选:</span>
+                    {masteryStatusFilter !== "all" && (
+                        <Badge variant="secondary" className="cursor-pointer" onClick={() => setMasteryStatusFilter("all")}>
+                            {masteryStatusFilter}<span className="ml-1 text-xs">×</span>
+                        </Badge>
+                    )}
+                    {subjectModuleFilter !== "all" && (
+                        <Badge variant="secondary" className="cursor-pointer" onClick={() => setSubjectModuleFilter("all")}>
+                            {subjectModuleFilter}<span className="ml-1 text-xs">×</span>
+                        </Badge>
+                    )}
+                    {mistakeReasonFilter !== "all" && (
+                        <Badge variant="secondary" className="cursor-pointer" onClick={() => setMistakeReasonFilter("all")}>
+                            {mistakeReasonFilter}<span className="ml-1 text-xs">×</span>
+                        </Badge>
+                    )}
                 </div>
             )}
 
@@ -404,6 +471,15 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                             })()}
                                         </div>
                                         <div className="flex flex-wrap gap-2 mt-3">
+                                            <Badge variant="outline" className="text-xs">
+                                                {item.subjectModule || "其他"}
+                                            </Badge>
+                                            <Badge variant="outline" className="text-xs">
+                                                {item.mistakeReason || "其他"}
+                                            </Badge>
+                                            <Badge variant={item.masteryStatus === "长期易错" ? "destructive" : "secondary"} className="text-xs">
+                                                {item.masteryStatus || "未复盘"}
+                                            </Badge>
                                             <Badge variant={item.mistakeStatus === "wrong_attempt" ? "default" : "secondary"} className="text-xs">
                                                 {getMistakeStatusLabel(item.mistakeStatus, language)}
                                             </Badge>

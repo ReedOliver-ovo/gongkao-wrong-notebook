@@ -6,6 +6,7 @@ import { z } from "zod";
 import { hash } from "bcryptjs";
 import { unauthorized, notFound, badRequest, validationError, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
+import { normalizeExamType } from "@/lib/civil-service";
 
 const logger = createLogger('api:user');
 
@@ -13,6 +14,7 @@ const userUpdateSchema = z.object({
     name: z.string().optional(),
     email: z.string().optional(),
     password: z.string().optional(),
+    examType: z.string().optional(),
     educationStage: z.string().optional(),
     enrollmentYear: z.number().optional().nullable(),
 });
@@ -30,6 +32,7 @@ export async function GET() {
             select: {
                 name: true,
                 email: true,
+                examType: true,
                 educationStage: true,
                 enrollmentYear: true,
                 // Do not return password
@@ -58,12 +61,13 @@ export async function PATCH(req: Request) {
 
     try {
         const body = await req.json();
-        const { name, email, password, educationStage, enrollmentYear } = userUpdateSchema.parse(body);
+        const { name, email, password, examType, educationStage, enrollmentYear } = userUpdateSchema.parse(body);
 
         const updateData: any = {};
 
         // 只有非空字符串才会触发更新
         if (name && name.trim()) updateData.name = name.trim();
+        if (examType && examType.trim()) updateData.examType = normalizeExamType(examType);
         if (educationStage && educationStage.trim()) updateData.educationStage = educationStage.trim();
         if (typeof enrollmentYear === 'number' && !isNaN(enrollmentYear)) {
             updateData.enrollmentYear = enrollmentYear;
@@ -93,6 +97,7 @@ export async function PATCH(req: Request) {
             select: {
                 name: true,
                 email: true,
+                examType: true,
                 educationStage: true,
                 enrollmentYear: true,
             }

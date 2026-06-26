@@ -23,6 +23,15 @@ interface UploadZoneProps {
     isAnalyzing: boolean;
 }
 
+type CaptureControllerLike = {
+    setFocusBehavior(behavior: 'no-focus-change' | 'focus-capturing-application'): void;
+};
+
+type DisplayMediaOptionsWithChromeHints = DisplayMediaStreamOptions & {
+    preferCurrentTab?: boolean;
+    controller?: CaptureControllerLike;
+};
+
 export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
     const { t } = useLanguage();
     const [isScreenshotting, setIsScreenshotting] = useState(false);
@@ -74,23 +83,20 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
 
         try {
             // 创建 CaptureController 来控制焦点行为
-            let controller;
+            let controller: CaptureControllerLike | undefined;
             if ('CaptureController' in window) {
                 controller = new window.CaptureController();
             }
 
             // 请求屏幕共享权限，优先当前标签页
-            const displayMediaOptions: DisplayMediaStreamOptions & {
-                preferCurrentTab?: boolean;
-                controller?: any;
-            } = {
+            const displayMediaOptions: DisplayMediaOptionsWithChromeHints = {
                 video: true,
                 audio: false,
                 preferCurrentTab: false,  // 优先显示"此标签页"选项
             };
 
             if (controller) {
-                (displayMediaOptions as any).controller = controller;
+                displayMediaOptions.controller = controller;
             }
 
             const stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
@@ -98,7 +104,7 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
             // 获取视频轨道并检查捕获类型
             const [videoTrack] = stream.getVideoTracks();
             const settings = videoTrack.getSettings();
-            const displaySurface = (settings as any).displaySurface;  // 'browser' 表示标签页
+            const displaySurface = (settings as MediaTrackSettings & { displaySurface?: string }).displaySurface;  // 'browser' 表示标签页
 
             // 如果是标签页或窗口，设置不切换焦点
             if (controller && (displaySurface === 'browser' || displaySurface === 'window')) {
@@ -185,7 +191,7 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
                     }`}
             >
                 <CardContent className="flex flex-col items-center justify-center py-12 space-y-4 text-center min-h-[300px]">
-                    <input {...getInputProps()} />
+                    <input {...getInputProps({ capture: "environment" })} />
                     <div className="p-4 bg-muted rounded-full">
                         {isAnalyzing ? (
                             <Loader2 className="h-10 w-10 text-primary animate-spin" />
@@ -199,6 +205,9 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
                         </h3>
                         <p className="text-sm text-muted-foreground">
                             {isAnalyzing ? t.app.analyzing : t.app.dragDrop}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            iPhone 可直接拍照录入，iPad 横屏可上传截图复盘
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
                             {t.upload.support}

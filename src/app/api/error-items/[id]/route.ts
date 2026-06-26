@@ -5,8 +5,14 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { unauthorized, forbidden, notFound, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
-import { findParentTagIdForGrade } from "@/lib/tag-recognition";
 import { normalizeMistakeStatusForSave } from "@/lib/mistake-status";
+import {
+    normalizeExamType,
+    normalizeMasteryStatus,
+    normalizeMistakeReason,
+    normalizeSubjectModule,
+    parseOptionsText,
+} from "@/lib/civil-service";
 
 const logger = createLogger('api:error-items:id');
 
@@ -75,7 +81,30 @@ export async function PUT(
         }
 
         const body = await req.json();
-        const { knowledgePoints, gradeSemester, paperLevel, questionText, answerText, analysis, subjectId,  wrongAnswerText, mistakeAnalysis, mistakeStatus, geogebraCommands } = body;
+        const {
+            knowledgePoints,
+            gradeSemester,
+            paperLevel,
+            questionText,
+            answerText,
+            analysis,
+            subjectId,
+            wrongAnswerText,
+            mistakeAnalysis,
+            mistakeStatus,
+            geogebraCommands,
+            examType,
+            subjectModule,
+            questionType,
+            options,
+            mistakeReason,
+            aiMistakeReasonSuggestion,
+            fastestSolution,
+            trapAnalysis,
+            nextReviewTip,
+            similarQuestionMethod,
+            masteryStatus,
+        } = body;
 
         const errorItem = await prisma.errorItem.findUnique({
             where: { id },
@@ -109,13 +138,23 @@ export async function PUT(
         }
         if (mistakeStatus !== undefined || wrongAnswerText !== undefined || mistakeAnalysis !== undefined) {
             const nextWrongAnswerText = wrongAnswerText !== undefined ? wrongAnswerText : errorItem.wrongAnswerText;
-            const nextMistakeAnalysis = mistakeAnalysis !== undefined ? mistakeAnalysis : errorItem.mistakeAnalysis;
             updateData.mistakeStatus = normalizeMistakeStatusForSave(
                 mistakeStatus,
                 nextWrongAnswerText
             );
         }
         if (geogebraCommands !== undefined) updateData.geogebraCommands = geogebraCommands || null;
+        if (examType !== undefined) updateData.examType = normalizeExamType(examType);
+        if (subjectModule !== undefined) updateData.subjectModule = normalizeSubjectModule(subjectModule);
+        if (questionType !== undefined) updateData.questionType = questionType || null;
+        if (options !== undefined) updateData.optionsJson = JSON.stringify(parseOptionsText(options));
+        if (mistakeReason !== undefined) updateData.mistakeReason = normalizeMistakeReason(mistakeReason);
+        if (aiMistakeReasonSuggestion !== undefined) updateData.aiMistakeReasonSuggestion = normalizeMistakeReason(aiMistakeReasonSuggestion);
+        if (fastestSolution !== undefined) updateData.fastestSolution = fastestSolution || null;
+        if (trapAnalysis !== undefined) updateData.trapAnalysis = trapAnalysis || null;
+        if (nextReviewTip !== undefined) updateData.nextReviewTip = nextReviewTip || null;
+        if (similarQuestionMethod !== undefined) updateData.similarQuestionMethod = similarQuestionMethod || null;
+        if (masteryStatus !== undefined) updateData.masteryStatus = normalizeMasteryStatus(masteryStatus);
 
         // 处理 knowledgePoints (标签)
         if (knowledgePoints !== undefined) {
@@ -125,14 +164,7 @@ export async function PUT(
                     ? JSON.parse(knowledgePoints)
                     : [];
 
-            // 推断学科
-            const subjectKey = errorItem.subject?.name?.toLowerCase().includes('math') ||
-                errorItem.subject?.name?.includes('数学')
-                ? 'math'
-                : errorItem.subject?.name?.toLowerCase().includes('english') ||
-                    errorItem.subject?.name?.includes('英语')
-                    ? 'english'
-                    : 'other';
+            const subjectKey = normalizeSubjectModule(subjectModule ?? errorItem.subjectModule);
 
             const tagConnections: { id: string }[] = [];
             for (const tagName of tagNames) {
@@ -147,19 +179,13 @@ export async function PUT(
                 });
 
                 if (!tag) {
-                    // Determine grade context for the new tag
-                    // Use the incoming gradeSemester (priority) or the existing one on the item
-                    const contextGrade = gradeSemester !== undefined ? gradeSemester : errorItem.gradeSemester;
-
-                    const parentId = await findParentTagIdForGrade(contextGrade, subjectKey);
-
                     tag = await prisma.knowledgeTag.create({
                         data: {
                             name: tagName,
                             subject: subjectKey,
                             isSystem: false,
                             userId: user.id,
-                            parentId: parentId, // Link to Grade node
+                            parentId: null,
                         },
                     });
                 }

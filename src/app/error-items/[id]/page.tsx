@@ -14,11 +14,16 @@ import { TagInput } from "@/components/tag-input";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiClient } from "@/lib/api-client";
-import { UserProfile, Notebook } from "@/types/api";
-import { inferSubjectFromName } from "@/lib/knowledge-tags";
+import { Notebook } from "@/types/api";
 import { getMistakeStatusLabel, normalizeMistakeStatusForSave } from "@/lib/mistake-status";
 import { NotebookSelector } from "@/components/notebook-selector";
 import { GeogebraDemo } from "@/components/geogebra-demo";
+import {
+    CIVIL_SERVICE_EXAM_TYPES,
+    CIVIL_SERVICE_MASTERY_STATUS,
+    CIVIL_SERVICE_MISTAKE_REASONS,
+    CIVIL_SERVICE_SUBJECT_MODULES,
+} from "@/lib/civil-service";
 
 interface KnowledgeTag {
     id: string;
@@ -46,6 +51,31 @@ interface ErrorItemDetail {
     gradeSemester?: string | null;
     paperLevel?: string | null;
     geogebraCommands?: string | null;
+    examType?: string | null;
+    subjectModule?: string | null;
+    questionType?: string | null;
+    optionsJson?: string | null;
+    mistakeReason?: string | null;
+    aiMistakeReasonSuggestion?: string | null;
+    fastestSolution?: string | null;
+    trapAnalysis?: string | null;
+    nextReviewTip?: string | null;
+    similarQuestionMethod?: string | null;
+    masteryStatus?: string | null;
+    nextReviewAt?: string | null;
+    lastReviewedAt?: string | null;
+    consecutiveCorrectCount?: number;
+    wrongReviewCount?: number;
+}
+
+function optionsJsonToText(optionsJson?: string | null) {
+    if (!optionsJson) return "";
+    try {
+        const parsed = JSON.parse(optionsJson);
+        return Array.isArray(parsed) ? parsed.join("\n") : "";
+    } catch {
+        return "";
+    }
 }
 
 export default function ErrorDetailPage() {
@@ -60,25 +90,22 @@ export default function ErrorDetailPage() {
     const [isEditingTags, setIsEditingTags] = useState(false);
     const [tagsInput, setTagsInput] = useState<string[]>([]);
     const [isEditingMetadata, setIsEditingMetadata] = useState(false);
-    const [gradeSemesterInput, setGradeSemesterInput] = useState("");
     const [paperLevelInput, setPaperLevelInput] = useState("a");
     const [notebookInput, setNotebookInput] = useState<string | null>(null);
-
-    const [educationStage, setEducationStage] = useState<string | undefined>(undefined);
-
+    const [examTypeInput, setExamTypeInput] = useState("省考");
+    const [subjectModuleInput, setSubjectModuleInput] = useState("其他");
+    const [questionTypeInput, setQuestionTypeInput] = useState("");
+    const [optionsInput, setOptionsInput] = useState("");
+    const [mistakeReasonInput, setMistakeReasonInput] = useState("其他");
+    const [masteryStatusInput, setMasteryStatusInput] = useState("未复盘");
+    const [fastestSolutionInput, setFastestSolutionInput] = useState("");
+    const [trapAnalysisInput, setTrapAnalysisInput] = useState("");
+    const [nextReviewTipInput, setNextReviewTipInput] = useState("");
+    const [similarQuestionMethodInput, setSimilarQuestionMethodInput] = useState("");
     const [isAnalyzingGeogebra, setIsAnalyzingGeogebra] = useState(false);
     const [geogebraError, setGeogebraError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Fetch user info for education stage
-        apiClient.get<UserProfile>("/api/user")
-            .then(user => {
-                if (user && user.educationStage) {
-                    setEducationStage(user.educationStage);
-                }
-            })
-            .catch(err => console.error("Failed to fetch user info:", err));
-
         if (params.id) {
             fetchItem(params.id as string);
         }
@@ -217,8 +244,17 @@ export default function ErrorDetailPage() {
     const startEditingMetadata = () => {
         if (item) {
             setNotebookInput(item.subjectId || null);
-            setGradeSemesterInput(item.gradeSemester || "");
             setPaperLevelInput(item.paperLevel || "a");
+            setExamTypeInput(item.examType || "省考");
+            setSubjectModuleInput(item.subjectModule || "其他");
+            setQuestionTypeInput(item.questionType || "");
+            setOptionsInput(optionsJsonToText(item.optionsJson));
+            setMistakeReasonInput(item.mistakeReason || "其他");
+            setMasteryStatusInput(item.masteryStatus || "未复盘");
+            setFastestSolutionInput(item.fastestSolution || "");
+            setTrapAnalysisInput(item.trapAnalysis || "");
+            setNextReviewTipInput(item.nextReviewTip || "");
+            setSimilarQuestionMethodInput(item.similarQuestionMethod || "");
             setIsEditingMetadata(true);
         }
     };
@@ -227,8 +263,17 @@ export default function ErrorDetailPage() {
         try {
             await apiClient.put(`/api/error-items/${item?.id}`, {
                 subjectId: notebookInput || null,
-                gradeSemester: gradeSemesterInput,
                 paperLevel: paperLevelInput,
+                examType: examTypeInput,
+                subjectModule: subjectModuleInput,
+                questionType: questionTypeInput,
+                options: optionsInput.split(/\n/).map(item => item.trim()).filter(Boolean),
+                mistakeReason: mistakeReasonInput,
+                masteryStatus: masteryStatusInput,
+                fastestSolution: fastestSolutionInput,
+                trapAnalysis: trapAnalysisInput,
+                nextReviewTip: nextReviewTipInput,
+                similarQuestionMethod: similarQuestionMethodInput,
             });
 
             setIsEditingMetadata(false);
@@ -243,8 +288,17 @@ export default function ErrorDetailPage() {
     const cancelEditingMetadata = () => {
         setIsEditingMetadata(false);
         setNotebookInput(null);
-        setGradeSemesterInput("");
         setPaperLevelInput("a");
+        setExamTypeInput("省考");
+        setSubjectModuleInput("其他");
+        setQuestionTypeInput("");
+        setOptionsInput("");
+        setMistakeReasonInput("其他");
+        setMasteryStatusInput("未复盘");
+        setFastestSolutionInput("");
+        setTrapAnalysisInput("");
+        setNextReviewTipInput("");
+        setSimilarQuestionMethodInput("");
     };
 
     const [isEditingQuestion, setIsEditingQuestion] = useState(false);
@@ -546,8 +600,7 @@ export default function ErrorDetailPage() {
                                                 value={tagsInput}
                                                 onChange={setTagsInput}
                                                 placeholder={t.editor?.tagsPlaceholder || 'Enter or select knowledge tags...'}
-                                                subject={inferSubjectFromName(item.subject?.name || null) || undefined}
-                                                gradeStage={educationStage}
+                                                subject={item.subjectModule || "其他"}
                                             />
                                             <p className="text-xs text-muted-foreground">
                                                 {t.editor?.tagsHint || '💡 Select from standard or custom tags'}
@@ -574,7 +627,7 @@ export default function ErrorDetailPage() {
                                     )}
                                 </div>
 
-                                {/* 年级/学期 和 试卷等级 */}
+                                {/* 错题本、试卷等级和考公/考编复盘信息 */}
                                 <div className="space-y-2 pt-4 border-t">
                                     <div className="flex justify-between items-center">
                                         <h4 className="text-sm font-semibold">
@@ -605,16 +658,6 @@ export default function ErrorDetailPage() {
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-sm text-muted-foreground">
-                                                    {t.filter.grade}
-                                                </label>
-                                                <Input
-                                                    value={gradeSemesterInput}
-                                                    onChange={(e) => setGradeSemesterInput(e.target.value)}
-                                                    placeholder={t.notebook?.gradeSemesterPlaceholder || 'e.g. Grade 7, Semester 1'}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm text-muted-foreground">
                                                     {t.filter.paperLevel}
                                                 </label>
                                                 <Select
@@ -630,6 +673,66 @@ export default function ErrorDetailPage() {
                                                         <SelectItem value="other">{t.editor.paperLevels?.other || 'Other'}</SelectItem>
                                                     </SelectContent>
                                                 </Select>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <div className="space-y-2">
+                                                    <label className="text-sm text-muted-foreground">考试类型</label>
+                                                    <Select value={examTypeInput} onValueChange={setExamTypeInput}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {CIVIL_SERVICE_EXAM_TYPES.map(value => (
+                                                                <SelectItem key={value} value={value}>{value}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm text-muted-foreground">科目模块</label>
+                                                    <Select value={subjectModuleInput} onValueChange={setSubjectModuleInput}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {CIVIL_SERVICE_SUBJECT_MODULES.map(value => (
+                                                                <SelectItem key={value} value={value}>{value}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm text-muted-foreground">错因分类</label>
+                                                    <Select value={mistakeReasonInput} onValueChange={setMistakeReasonInput}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {CIVIL_SERVICE_MISTAKE_REASONS.map(value => (
+                                                                <SelectItem key={value} value={value}>{value}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm text-muted-foreground">掌握状态</label>
+                                                    <Select value={masteryStatusInput} onValueChange={setMasteryStatusInput}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {CIVIL_SERVICE_MASTERY_STATUS.map(value => (
+                                                                <SelectItem key={value} value={value}>{value}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-muted-foreground">题型</label>
+                                                <Input value={questionTypeInput} onChange={(e) => setQuestionTypeInput(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-muted-foreground">选项</label>
+                                                <Textarea value={optionsInput} onChange={(e) => setOptionsInput(e.target.value)} rows={4} />
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <Textarea value={fastestSolutionInput} onChange={(e) => setFastestSolutionInput(e.target.value)} placeholder="最快解法" rows={4} />
+                                                <Textarea value={trapAnalysisInput} onChange={(e) => setTrapAnalysisInput(e.target.value)} placeholder="易错陷阱" rows={4} />
+                                                <Textarea value={nextReviewTipInput} onChange={(e) => setNextReviewTipInput(e.target.value)} placeholder="下次做题提醒" rows={4} />
+                                                <Textarea value={similarQuestionMethodInput} onChange={(e) => setSimilarQuestionMethodInput(e.target.value)} placeholder="同类题识别方法" rows={4} />
                                             </div>
                                             <div className="flex gap-2">
                                                 <Button size="sm" onClick={saveMetadataHandler}>
@@ -651,17 +754,59 @@ export default function ErrorDetailPage() {
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-muted-foreground">{t.filter.grade}:</span>
-                                                <span className="font-medium">
-                                                    {item.gradeSemester || (t.common?.notSet || 'Not set')}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
                                                 <span className="text-muted-foreground">{t.filter.paperLevel}:</span>
                                                 <span className="font-medium">
                                                     {item.paperLevel ? (t.editor.paperLevels?.[item.paperLevel as 'a' | 'b' | 'other'] || item.paperLevel) : (t.common?.notSet || 'Not set')}
                                                 </span>
                                             </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">考试类型:</span>
+                                                <span className="font-medium">{item.examType || '省考'}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">科目模块:</span>
+                                                <span className="font-medium">{item.subjectModule || '其他'}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">题型:</span>
+                                                <span className="font-medium">{item.questionType || (t.common?.notSet || 'Not set')}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">错因分类:</span>
+                                                <span className="font-medium">{item.mistakeReason || '其他'}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">掌握状态:</span>
+                                                <span className="font-medium">{item.masteryStatus || '未复盘'}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">下次复盘:</span>
+                                                <span className="font-medium">{item.nextReviewAt ? new Date(item.nextReviewAt).toLocaleDateString() : (t.common?.notSet || 'Not set')}</span>
+                                            </div>
+                                            {item.fastestSolution && (
+                                                <div className="space-y-1">
+                                                    <span className="text-muted-foreground">最快解法:</span>
+                                                    <p className="text-sm">{item.fastestSolution}</p>
+                                                </div>
+                                            )}
+                                            {item.trapAnalysis && (
+                                                <div className="space-y-1">
+                                                    <span className="text-muted-foreground">易错陷阱:</span>
+                                                    <p className="text-sm">{item.trapAnalysis}</p>
+                                                </div>
+                                            )}
+                                            {item.nextReviewTip && (
+                                                <div className="space-y-1">
+                                                    <span className="text-muted-foreground">下次做题提醒:</span>
+                                                    <p className="text-sm">{item.nextReviewTip}</p>
+                                                </div>
+                                            )}
+                                            {item.similarQuestionMethod && (
+                                                <div className="space-y-1">
+                                                    <span className="text-muted-foreground">同类题识别方法:</span>
+                                                    <p className="text-sm">{item.similarQuestionMethod}</p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

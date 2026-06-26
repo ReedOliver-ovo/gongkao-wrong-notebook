@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
         update: vi.fn(),
         delete: vi.fn(),
     },
+    mockPrismaErrorItem: {
+        updateMany: vi.fn(),
+    },
     mockSession: {
         user: {
             email: 'user@example.com',
@@ -32,6 +35,7 @@ vi.mock('@/lib/prisma', () => ({
     prisma: {
         user: mocks.mockPrismaUser,
         subject: mocks.mockPrismaSubject,
+        errorItem: mocks.mockPrismaErrorItem,
     },
 }));
 
@@ -66,8 +70,8 @@ describe('/api/notebooks', () => {
     describe('GET /api/notebooks (获取所有错题本)', () => {
         it('应该返回用户的所有错题本', async () => {
             const notebooks = [
-                { id: 'nb-1', name: '数学', userId: 'user-123', _count: { errorItems: 5 } },
-                { id: 'nb-2', name: '英语', userId: 'user-123', _count: { errorItems: 3 } },
+                { id: 'nb-1', name: '资料分析', userId: 'user-123', _count: { errorItems: 5 } },
+                { id: 'nb-2', name: '逻辑推理', userId: 'user-123', _count: { errorItems: 3 } },
             ];
             mocks.mockPrismaSubject.findMany.mockResolvedValue(notebooks);
 
@@ -76,17 +80,17 @@ describe('/api/notebooks', () => {
 
             expect(response.status).toBe(200);
             expect(data).toHaveLength(2);
-            expect(data[0].name).toBe('数学');
+            expect(data[0].name).toBe('资料分析');
             expect(data[0]._count.errorItems).toBe(5);
         });
 
-        it('应该在没有错题本时创建默认错题本', async () => {
+        it('应该在没有错题本时创建考公/考编默认错题本', async () => {
             // 第一次查询返回空数组，创建后第二次查询返回默认错题本
             mocks.mockPrismaSubject.findMany
                 .mockResolvedValueOnce([])
                 .mockResolvedValueOnce([
-                    { id: 'nb-1', name: '数学', userId: 'user-123', _count: { errorItems: 0 } },
-                    { id: 'nb-2', name: '英语', userId: 'user-123', _count: { errorItems: 0 } },
+                    { id: 'nb-1', name: '资料分析', userId: 'user-123', _count: { errorItems: 0 } },
+                    { id: 'nb-2', name: '逻辑推理', userId: 'user-123', _count: { errorItems: 0 } },
                 ]);
             mocks.mockPrismaSubject.create.mockResolvedValue({});
 
@@ -97,6 +101,71 @@ describe('/api/notebooks', () => {
             expect(data).toHaveLength(2);
             // 验证创建了默认错题本
             expect(mocks.mockPrismaSubject.create).toHaveBeenCalledTimes(2);
+            expect(mocks.mockPrismaSubject.create).toHaveBeenCalledWith({
+                data: { name: '资料分析', userId: 'user-123' },
+            });
+            expect(mocks.mockPrismaSubject.create).toHaveBeenCalledWith({
+                data: { name: '逻辑推理', userId: 'user-123' },
+            });
+        });
+
+        it('应该将旧默认错题本数学和英语改名为考公/考编默认错题本', async () => {
+            mocks.mockPrismaSubject.findMany
+                .mockResolvedValueOnce([
+                    { id: 'nb-math', name: '数学', userId: 'user-123', _count: { errorItems: 2 } },
+                    { id: 'nb-english', name: '英语', userId: 'user-123', _count: { errorItems: 1 } },
+                ])
+                .mockResolvedValueOnce([
+                    { id: 'nb-math', name: '资料分析', userId: 'user-123', _count: { errorItems: 2 } },
+                    { id: 'nb-english', name: '逻辑推理', userId: 'user-123', _count: { errorItems: 1 } },
+                ]);
+            mocks.mockPrismaSubject.update.mockResolvedValue({});
+
+            const response = await GET();
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.map((item: any) => item.name)).toEqual(['资料分析', '逻辑推理']);
+            expect(mocks.mockPrismaSubject.update).toHaveBeenCalledWith({
+                where: { id: 'nb-math' },
+                data: { name: '资料分析' },
+            });
+            expect(mocks.mockPrismaSubject.update).toHaveBeenCalledWith({
+                where: { id: 'nb-english' },
+                data: { name: '逻辑推理' },
+            });
+        });
+
+        it('目标错题本已存在时应迁移旧错题并删除旧默认本', async () => {
+            mocks.mockPrismaSubject.findMany
+                .mockResolvedValueOnce([
+                    { id: 'nb-math', name: '数学', userId: 'user-123', _count: { errorItems: 2 } },
+                    { id: 'nb-data', name: '资料分析', userId: 'user-123', _count: { errorItems: 3 } },
+                    { id: 'nb-english', name: '英语', userId: 'user-123', _count: { errorItems: 1 } },
+                    { id: 'nb-logic', name: '逻辑推理', userId: 'user-123', _count: { errorItems: 4 } },
+                ])
+                .mockResolvedValueOnce([
+                    { id: 'nb-data', name: '资料分析', userId: 'user-123', _count: { errorItems: 5 } },
+                    { id: 'nb-logic', name: '逻辑推理', userId: 'user-123', _count: { errorItems: 5 } },
+                ]);
+            mocks.mockPrismaErrorItem.updateMany.mockResolvedValue({ count: 3 });
+            mocks.mockPrismaSubject.delete.mockResolvedValue({});
+
+            const response = await GET();
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.map((item: any) => item.name)).toEqual(['资料分析', '逻辑推理']);
+            expect(mocks.mockPrismaErrorItem.updateMany).toHaveBeenCalledWith({
+                where: { subjectId: 'nb-math', userId: 'user-123' },
+                data: { subjectId: 'nb-data' },
+            });
+            expect(mocks.mockPrismaErrorItem.updateMany).toHaveBeenCalledWith({
+                where: { subjectId: 'nb-english', userId: 'user-123' },
+                data: { subjectId: 'nb-logic' },
+            });
+            expect(mocks.mockPrismaSubject.delete).toHaveBeenCalledWith({ where: { id: 'nb-math' } });
+            expect(mocks.mockPrismaSubject.delete).toHaveBeenCalledWith({ where: { id: 'nb-english' } });
         });
     });
 

@@ -27,6 +27,7 @@ export async function GET() {
                 role: true,
                 isActive: true,
                 createdAt: true,
+                examType: true,
                 _count: {
                     select: {
                         errorItems: true,

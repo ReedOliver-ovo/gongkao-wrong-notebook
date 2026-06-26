@@ -30,6 +30,7 @@ import { frontendLogger } from "@/lib/frontend-logger";
 import { AppConfig, UserProfile, UpdateUserProfileRequest, OpenAIInstance } from "@/types/api";
 import { ModelSelector } from "@/components/ui/model-selector";
 import { PromptSettings } from "@/components/settings/prompt-settings";
+import { CIVIL_SERVICE_EXAM_TYPES } from "@/lib/civil-service";
 
 import { MessageSquareText, Info, ExternalLink, Github, ScrollText } from "lucide-react";
 const MAX_OPENAI_INSTANCES = 10;
@@ -46,8 +47,7 @@ function generateId(): string {
 interface ProfileFormState {
     name: string;
     email: string;
-    educationStage: string;
-    enrollmentYear: string | number;
+    examType: string;
     password: string;
 }
 
@@ -83,8 +83,7 @@ export function SettingsDialog() {
     const [profile, setProfile] = useState<ProfileFormState>({
         name: "",
         email: "",
-        educationStage: "",
-        enrollmentYear: "",
+        examType: "省考",
         password: ""
     });
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -132,8 +131,7 @@ export function SettingsDialog() {
             setProfile({
                 name: data.name || "",
                 email: data.email || "",
-                educationStage: data.educationStage || "",
-                enrollmentYear: data.enrollmentYear || "",
+                examType: data.examType || "省考",
                 password: ""
             });
         } catch (error) {
@@ -221,12 +219,8 @@ export function SettingsDialog() {
             const payload: UpdateUserProfileRequest = {
                 name: profile.name,
                 email: profile.email,
-                educationStage: profile.educationStage,
+                examType: profile.examType,
             };
-
-            if (profile.enrollmentYear) {
-                payload.enrollmentYear = parseInt(profile.enrollmentYear.toString());
-            }
 
             if (profile.password) {
                 payload.password = profile.password;
@@ -802,30 +796,20 @@ export function SettingsDialog() {
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label>{t.auth?.educationStage || "Education Stage"}</Label>
+                                        <Label>{t.auth?.examType || "考试类型"}</Label>
                                         <Select
-                                            value={profile.educationStage || ""}
-                                            onValueChange={(val) => setProfile({ ...profile, educationStage: val })}
+                                            value={profile.examType || "省考"}
+                                            onValueChange={(val) => setProfile({ ...profile, examType: val })}
                                         >
                                             <SelectTrigger>
-                                                <SelectValue placeholder={t.auth?.selectStage || "Select Stage"} />
+                                                <SelectValue placeholder={t.auth?.selectExamType || "选择考试类型"} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="primary">{t.auth?.primary || 'Primary School'}</SelectItem>
-                                                <SelectItem value="junior_high">{t.auth?.juniorHigh || 'Junior High'}</SelectItem>
-                                                <SelectItem value="senior_high">{t.auth?.seniorHigh || 'Senior High'}</SelectItem>
-                                                <SelectItem value="university">{t.auth?.university || 'University'}</SelectItem>
+                                                {CIVIL_SERVICE_EXAM_TYPES.map(item => (
+                                                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>{t.auth?.enrollmentYear || "Enrollment Year"}</Label>
-                                        <Input
-                                            type="number"
-                                            value={profile.enrollmentYear || ""}
-                                            onChange={(e) => setProfile({ ...profile, enrollmentYear: e.target.value })}
-                                            placeholder="YYYY"
-                                        />
                                     </div>
                                 </div>
 

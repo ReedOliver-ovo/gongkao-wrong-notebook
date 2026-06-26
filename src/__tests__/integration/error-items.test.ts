@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => ({
     mockPrismaSubject: {
         findUnique: vi.fn(),
     },
+    mockPrismaReviewSchedule: {
+        createMany: vi.fn(),
+        findFirst: vi.fn(),
+        update: vi.fn(),
+    },
     mockSession: {
         user: {
             email: 'user@example.com',
@@ -42,6 +47,7 @@ vi.mock('@/lib/prisma', () => ({
         errorItem: mocks.mockPrismaErrorItem,
         knowledgeTag: mocks.mockPrismaKnowledgeTag,
         subject: mocks.mockPrismaSubject,
+        reviewSchedule: mocks.mockPrismaReviewSchedule,
     },
 }));
 
@@ -103,6 +109,7 @@ describe('/api/error-items', () => {
 
         // Default: errorItem.findFirst returns null (no duplicate found)
         mocks.mockPrismaErrorItem.findFirst.mockResolvedValue(null);
+        mocks.mockPrismaReviewSchedule.createMany.mockResolvedValue({ count: 4 });
     });
 
     describe('POST /api/error-items (创建错题)', () => {
@@ -136,6 +143,74 @@ describe('/api/error-items', () => {
             expect(response.status).toBe(201);
             expect(data.id).toBe('error-item-1');
             expect(data.questionText).toBe('求解 x + 2 = 5');
+        });
+
+        it('应该保存考公字段并为新错题生成 2/7/14/30 天复盘计划', async () => {
+            const createdAt = new Date('2026-06-26T00:00:00.000Z');
+            const errorItemData = {
+                questionText: '资料分析题',
+                answerText: 'B',
+                analysis: '用增长率公式。',
+                knowledgePoints: ['增长率'],
+                originalImageUrl: 'data:image/png;base64,test...',
+                examType: '国考',
+                subjectModule: '资料分析',
+                questionType: '增长率',
+                options: ['A. 10%', 'B. 12%'],
+                mistakeReason: '计算错误',
+                aiMistakeReasonSuggestion: '计算错误',
+                fastestSolution: '截位直除。',
+                trapAnalysis: '选项差距小。',
+                nextReviewTip: '先写公式。',
+                similarQuestionMethod: '识别现期/基期。',
+            };
+
+            mocks.mockPrismaErrorItem.create.mockResolvedValue({
+                id: 'error-item-1',
+                ...errorItemData,
+                userId: 'user-123',
+                masteryLevel: 0,
+                masteryStatus: '未复盘',
+                nextReviewAt: new Date('2026-06-28T00:00:00.000Z'),
+                createdAt,
+                tags: [],
+            });
+
+            const request = new Request('http://localhost/api/error-items', {
+                method: 'POST',
+                body: JSON.stringify(errorItemData),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST(request);
+
+            expect(response.status).toBe(201);
+            expect(mocks.mockPrismaErrorItem.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({
+                    examType: '国考',
+                    subjectModule: '资料分析',
+                    questionType: '增长率',
+                    optionsJson: JSON.stringify(['A. 10%', 'B. 12%']),
+                    mistakeReason: '计算错误',
+                    aiMistakeReasonSuggestion: '计算错误',
+                    fastestSolution: '截位直除。',
+                    trapAnalysis: '选项差距小。',
+                    nextReviewTip: '先写公式。',
+                    similarQuestionMethod: '识别现期/基期。',
+                    masteryStatus: '未复盘',
+                    consecutiveCorrectCount: 0,
+                    wrongReviewCount: 0,
+                    nextReviewAt: expect.any(Date),
+                }),
+            }));
+            expect(mocks.mockPrismaReviewSchedule.createMany).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.arrayContaining([
+                    expect.objectContaining({ errorItemId: 'error-item-1', reviewStage: 1, scheduledFor: expect.any(Date) }),
+                    expect.objectContaining({ errorItemId: 'error-item-1', reviewStage: 2, scheduledFor: expect.any(Date) }),
+                    expect.objectContaining({ errorItemId: 'error-item-1', reviewStage: 3, scheduledFor: expect.any(Date) }),
+                    expect.objectContaining({ errorItemId: 'error-item-1', reviewStage: 4, scheduledFor: expect.any(Date) }),
+                ]),
+            }));
         });
 
         it('应该成功创建错题并关联到科目', async () => {

@@ -7,6 +7,58 @@ import { createLogger } from "@/lib/logger";
 
 const logger = createLogger('api:notebooks');
 
+const DEFAULT_NOTEBOOK_NAMES = ["资料分析", "逻辑推理"] as const;
+const LEGACY_DEFAULT_NOTEBOOK_NAME_MAP = new Map<string, string>([
+    ["数学", "资料分析"],
+    ["英语", "逻辑推理"],
+]);
+
+type NotebookRecord = {
+    id: string;
+    name: string;
+    userId: string;
+    _count?: {
+        errorItems: number;
+    };
+};
+
+async function migrateLegacyDefaultNotebooks(userId: string, notebooks: NotebookRecord[]) {
+    let migrated = false;
+
+    for (const [legacyName, targetName] of LEGACY_DEFAULT_NOTEBOOK_NAME_MAP) {
+        const legacyNotebook = notebooks.find((notebook) => notebook.name === legacyName);
+        if (!legacyNotebook) continue;
+
+        const targetNotebook = notebooks.find(
+            (notebook) => notebook.name === targetName && notebook.id !== legacyNotebook.id
+        );
+
+        if (targetNotebook) {
+            await prisma.errorItem.updateMany({
+                where: {
+                    subjectId: legacyNotebook.id,
+                    userId,
+                },
+                data: {
+                    subjectId: targetNotebook.id,
+                },
+            });
+            await prisma.subject.delete({
+                where: { id: legacyNotebook.id },
+            });
+        } else {
+            await prisma.subject.update({
+                where: { id: legacyNotebook.id },
+                data: { name: targetName },
+            });
+        }
+
+        migrated = true;
+    }
+
+    return migrated;
+}
+
 /**
  * GET /api/notebooks
  * 获取用户所有错题本（Subjects）
@@ -44,9 +96,7 @@ export async function GET() {
 
         // If no notebooks exist, create default ones
         if (notebooks.length === 0) {
-            const defaultSubjects = ["数学", "英语"];
-
-            await Promise.all(defaultSubjects.map(name =>
+            await Promise.all(DEFAULT_NOTEBOOK_NAMES.map(name =>
                 prisma.subject.create({
                     data: {
                         name,
@@ -71,6 +121,25 @@ export async function GET() {
                     createdAt: 'desc',
                 },
             });
+        } else {
+            const migrated = await migrateLegacyDefaultNotebooks(user.id, notebooks);
+            if (migrated) {
+                notebooks = await prisma.subject.findMany({
+                    where: {
+                        userId: user.id,
+                    },
+                    include: {
+                        _count: {
+                            select: {
+                                errorItems: true,
+                            },
+                        },
+                    },
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                });
+            }
         }
 
         return NextResponse.json(notebooks);

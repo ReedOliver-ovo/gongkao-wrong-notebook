@@ -111,7 +111,7 @@ function SubjectDistributionChart({ data, t }: { data: AdminDashboardData; t: an
             <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-blue-500" />
-                    {t.admin?.dashboard?.subjectDistribution || "学科错题分布"}
+                    {t.admin?.dashboard?.subjectDistribution || "错题本分布"}
                 </CardTitle>
             </CardHeader>
             <CardContent>
@@ -393,7 +393,7 @@ export default function AdminPage() {
                 <MasteryDistributionCard data={data} t={t} />
             </div>
 
-            {/* Subject Distribution */}
+            {/* Notebook Distribution */}
             <SubjectDistributionChart data={data} t={t} />
 
             {/* User List */}

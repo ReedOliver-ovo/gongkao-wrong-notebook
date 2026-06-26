@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
+import { normalizeKnowledgeTagSubject } from '@/lib/civil-service';
 
 const logger = createLogger('api:tags');
 
@@ -54,7 +55,7 @@ function buildTagTree(tags: any[]): TagTreeNode[] {
 /**
  * GET /api/tags
  * Query params:
- *   - subject: 学科 (必填, e.g., 'math')
+ *   - subject: 科目模块 (必填；兼容旧学科 key)
  *   - flat: 是否返回扁平列表 (可选, 默认 false 返回树)
  */
 export async function GET(request: NextRequest) {
@@ -65,12 +66,13 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
-        const subject = searchParams.get('subject');
+        const subjectParam = searchParams.get('subject');
         const flat = searchParams.get('flat') === 'true';
 
-        if (!subject) {
+        if (!subjectParam) {
             return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
         }
+        const subject = normalizeKnowledgeTagSubject(subjectParam);
 
         // 获取系统标签 + 当前用户的自定义标签
         const tags = await prisma.knowledgeTag.findMany({
@@ -138,11 +140,12 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, subject, parentId } = body;
+        const { name, subject: subjectParam, parentId } = body;
 
-        if (!name || !subject) {
+        if (!name || !subjectParam) {
             return NextResponse.json({ error: 'Name and subject are required' }, { status: 400 });
         }
+        const subject = normalizeKnowledgeTagSubject(subjectParam);
 
         // 检查是否已存在 (在同一父节点下)
         // 注意：Prisma对于可选字段的查询需要特殊处理。如果是null，必须显式指定。

@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
         count: vi.fn(),
         findMany: vi.fn(),
     },
+    mockPrismaReviewSchedule: {
+        count: vi.fn(),
+    },
     mockSession: {
         user: {
             id: 'user-123',
@@ -24,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
     prisma: {
         errorItem: mocks.mockPrismaErrorItem,
+        reviewSchedule: mocks.mockPrismaReviewSchedule,
     },
 }));
 
@@ -44,6 +48,7 @@ describe('/api/analytics', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+        mocks.mockPrismaReviewSchedule.count.mockResolvedValue(0);
     });
 
     describe('GET /api/analytics (获取分析统计)', () => {

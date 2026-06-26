@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ParsedQuestion } from "@/lib/ai";
-import { calculateGrade } from "@/lib/grade-calculator";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,12 +15,18 @@ import { TagInput } from "@/components/tag-input";
 import { NotebookSelector } from "@/components/notebook-selector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiClient } from "@/lib/api-client";
-import { UserProfile, Notebook } from "@/types/api";
-import { inferSubjectFromName } from "@/lib/knowledge-tags";
 import { normalizeMistakeStatusForSave, type MistakeStatus } from "@/lib/mistake-status";
 import type { ReanswerQuestionResult } from "@/lib/ai/types";
 import { buildReanswerRequestBody } from "@/lib/reanswer-request";
 import { GeogebraDemo } from "@/components/geogebra-demo";
+import {
+    CIVIL_SERVICE_EXAM_TYPES,
+    CIVIL_SERVICE_MISTAKE_REASONS,
+    CIVIL_SERVICE_SUBJECT_MODULES,
+    type CivilServiceExamType,
+    type CivilServiceMistakeReason,
+    type CivilServiceSubjectModule,
+} from "@/lib/civil-service";
 
 interface ParsedQuestionWithSubject extends ParsedQuestion {
     subjectId?: string;
@@ -52,8 +57,19 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
         wrongAnswerText: initialData.wrongAnswerText || "",
         mistakeAnalysis: initialData.mistakeAnalysis || "",
         mistakeStatus: initialData.mistakeStatus || "unknown",
+        examType: initialData.examType || "省考",
+        subjectModule: initialData.subjectModule || "其他",
+        questionType: initialData.questionType || "",
+        options: initialData.options || [],
+        mistakeReason: initialData.mistakeReason || initialData.aiMistakeReasonSuggestion || "其他",
+        aiMistakeReasonSuggestion: initialData.aiMistakeReasonSuggestion || initialData.mistakeReason || "其他",
+        fastestSolution: initialData.fastestSolution || "",
+        trapAnalysis: initialData.trapAnalysis || "",
+        nextReviewTip: initialData.nextReviewTip || "",
+        similarQuestionMethod: initialData.similarQuestionMethod || "",
+        masteryStatus: initialData.masteryStatus || "未复盘",
         subjectId: initialSubjectId,
-        gradeSemester: "",
+        gradeSemester: (initialData as ParsedQuestionWithSubject).gradeSemester || "",
         paperLevel: "a"
     });
     const { t, language } = useLanguage();
@@ -61,29 +77,6 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
     const [isSaving, setIsSaving] = useState(false);
     const [isAnalyzingGeogebra, setIsAnalyzingGeogebra] = useState(false);
     const [geogebraError, setGeogebraError] = useState<string | null>(null);
-
-    const [educationStage, setEducationStage] = useState<string | undefined>(undefined);
-    const [notebooks, setNotebooks] = useState<Notebook[]>([]);
-
-
-
-    // Fetch user info and calculate grade on mount
-    useEffect(() => {
-        // Fetch notebooks for mapping
-        apiClient.get<Notebook[]>("/api/notebooks")
-            .then(setNotebooks)
-            .catch(err => console.error("Failed to fetch notebooks:", err));
-
-        apiClient.get<UserProfile>("/api/user")
-            .then(user => {
-                if (user && user.educationStage && user.enrollmentYear) {
-                    const grade = calculateGrade(user.educationStage, user.enrollmentYear, new Date(), language);
-                    setData(prev => ({ ...prev, gradeSemester: grade }));
-                    setEducationStage(user.educationStage);
-                }
-            })
-            .catch(err => console.error("Failed to fetch user info for grade calculation:", err));
-    }, [language]);
 
     // 重新解题函数
     const handleReanswer = async () => {
@@ -99,7 +92,6 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                 language,
                 subject: data.subject,
                 imagePreview,
-                gradeSemester: data.gradeSemester,
             });
 
             if (requestBody.imageBase64) {
@@ -253,15 +245,7 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>{t.editor.gradeSemester || "Grade/Semester"}</Label>
-                            <Input
-                                value={data.gradeSemester || ""}
-                                onChange={(e) => setData({ ...data, gradeSemester: e.target.value })}
-                                placeholder="e.g. Junior High Grade 1, 1st Semester"
-                            />
-                        </div>
+                    <div className="grid grid-cols-1 gap-4">
                         <div className="space-y-2">
                             <Label>{t.editor.paperLevel || "Paper Level"}</Label>
                             <Select
@@ -279,6 +263,82 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                             </Select>
                         </div>
                     </div>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>考公/考编信息</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label>考试类型</Label>
+                                <Select
+                                    value={data.examType || "省考"}
+                                    onValueChange={(val) => setData({ ...data, examType: val as CivilServiceExamType })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {CIVIL_SERVICE_EXAM_TYPES.map(item => (
+                                            <SelectItem key={item} value={item}>{item}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>科目模块</Label>
+                                <Select
+                                    value={data.subjectModule || "其他"}
+                                    onValueChange={(val) => setData({ ...data, subjectModule: val as CivilServiceSubjectModule })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {CIVIL_SERVICE_SUBJECT_MODULES.map(item => (
+                                            <SelectItem key={item} value={item}>{item}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>题型</Label>
+                                <Input
+                                    value={data.questionType || ""}
+                                    onChange={(e) => setData({ ...data, questionType: e.target.value })}
+                                    placeholder="如 资料分析-增长率"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>错因分类</Label>
+                                <Select
+                                    value={data.mistakeReason || "其他"}
+                                    onValueChange={(val) => setData({ ...data, mistakeReason: val as CivilServiceMistakeReason })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {CIVIL_SERVICE_MISTAKE_REASONS.map(item => (
+                                            <SelectItem key={item} value={item}>{item}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2 sm:col-span-2">
+                                <Label>选项</Label>
+                                <Textarea
+                                    value={(data.options || []).join("\n")}
+                                    onChange={(e) => setData({
+                                        ...data,
+                                        options: e.target.value.split(/\n/).map(item => item.trim()).filter(Boolean),
+                                    })}
+                                    className="min-h-[90px] font-mono text-sm"
+                                    placeholder="A. ...&#10;B. ..."
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     <div className="space-y-2">
                         <Label>{t.editor.question}</Label>
@@ -319,8 +379,7 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                             onChange={(tags) => setData({ ...data, knowledgePoints: tags })}
                             placeholder={t.editor.tagsPlaceholder || "Enter knowledge tags..."}
                             enterHint={t.editor.createTagHint}
-                            subject={inferSubjectFromName(notebooks.find(n => n.id === data.subjectId)?.name || null) || inferSubjectFromName(data.subject || null) || undefined}
-                            gradeStage={educationStage}
+                            subject={data.subjectModule || "其他"}
                         />
                         <p className="text-xs text-muted-foreground">
                             {t.editor.tagsHint || "💡 Tag suggestions will appear as you type"}
@@ -346,6 +405,46 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                             placeholder={t.editor.placeholder || "Supports Markdown and LaTeX..."}
                         />
                     </div>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>AI 复盘建议</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>最快解法</Label>
+                                <Textarea
+                                    value={data.fastestSolution || ""}
+                                    onChange={(e) => setData({ ...data, fastestSolution: e.target.value })}
+                                    className="min-h-[90px]"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>易错陷阱</Label>
+                                <Textarea
+                                    value={data.trapAnalysis || ""}
+                                    onChange={(e) => setData({ ...data, trapAnalysis: e.target.value })}
+                                    className="min-h-[90px]"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>下次做题提醒</Label>
+                                <Textarea
+                                    value={data.nextReviewTip || ""}
+                                    onChange={(e) => setData({ ...data, nextReviewTip: e.target.value })}
+                                    className="min-h-[80px]"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>同类题识别方法</Label>
+                                <Textarea
+                                    value={data.similarQuestionMethod || ""}
+                                    onChange={(e) => setData({ ...data, similarQuestionMethod: e.target.value })}
+                                    className="min-h-[90px]"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     <Card>
                         <CardHeader>

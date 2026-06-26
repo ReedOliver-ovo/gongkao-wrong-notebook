@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
-import { calculateGrade } from "@/lib/grade-calculator";
 import { unauthorized, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
-import { findParentTagIdForGrade } from "@/lib/tag-recognition";
-import { inferSubjectFromName } from "@/lib/knowledge-tags";
 import { normalizeMistakeStatusForSave } from "@/lib/mistake-status";
+import {
+    normalizeExamType,
+    normalizeMasteryStatus,
+    normalizeMistakeReason,
+    normalizeSubjectModule,
+    parseOptionsText,
+} from "@/lib/civil-service";
+import { buildInitialReviewSchedules } from "@/lib/review-scheduler";
 
 const logger = createLogger('api:error-items');
 
@@ -31,6 +36,17 @@ export async function POST(req: Request) {
             gradeSemester,
             paperLevel,
             geogebraCommands,
+            examType,
+            subjectModule,
+            questionType,
+            options,
+            mistakeReason,
+            aiMistakeReasonSuggestion,
+            fastestSolution,
+            trapAnalysis,
+            nextReviewTip,
+            similarQuestionMethod,
+            masteryStatus,
         } = body;
 
         // 记录请求参数（不记录完整图片数据）
@@ -101,21 +117,16 @@ export async function POST(req: Request) {
             }
         }
 
-        // 计算年级
-        let finalGradeSemester = gradeSemester;
-        if (!finalGradeSemester && user.educationStage && user.enrollmentYear) {
-            finalGradeSemester = calculateGrade(user.educationStage, user.enrollmentYear);
-            logger.debug({ finalGradeSemester, educationStage: user.educationStage, enrollmentYear: user.enrollmentYear }, 'Grade calculated');
-        }
+        // 旧字段仅保留兼容：新主流程不再自动计算年级/学期
+        const finalGradeSemester = gradeSemester || null;
+        const finalSubjectModule = normalizeSubjectModule(subjectModule);
 
         // 处理知识点标签
         const tagNames: string[] = Array.isArray(knowledgePoints) ? knowledgePoints : [];
         const tagConnections: { id: string }[] = [];
 
-        // 推断学科
-        const subject = await prisma.subject.findUnique({ where: { id: subjectId || '' } });
-        const subjectKey = inferSubjectFromName(subject?.name ?? null) || 'other';
-        logger.debug({ subjectId, subjectName: subject?.name, subjectKey }, 'Subject inferred');
+        const subjectKey = finalSubjectModule;
+        logger.debug({ subjectId, subjectKey }, 'Using civil-service module for tags');
 
         // 处理每个标签
         for (const tagName of tagNames) {
@@ -131,8 +142,7 @@ export async function POST(req: Request) {
                 });
 
                 if (!tag) {
-                    const parentId = await findParentTagIdForGrade(finalGradeSemester, subjectKey);
-                    logger.debug({ tagName, parentId, subjectKey }, 'Creating new custom tag');
+                    logger.debug({ tagName, subjectKey }, 'Creating new custom tag');
 
                     tag = await prisma.knowledgeTag.create({
                         data: {
@@ -140,7 +150,7 @@ export async function POST(req: Request) {
                             subject: subjectKey,
                             isSystem: false,
                             userId: user.id,
-                            parentId: parentId,
+                            parentId: null,
                         },
                     });
                     logger.debug({ tagId: tag.id, tagName }, 'Custom tag created');
@@ -156,6 +166,11 @@ export async function POST(req: Request) {
         }
 
         logger.info({ tagNames, tagConnectionsCount: tagConnections.length }, 'Creating ErrorItem with tags');
+
+        const reviewSchedules = buildInitialReviewSchedules(new Date());
+        const firstReviewAt = reviewSchedules[0]?.scheduledFor;
+        const finalMistakeReason = normalizeMistakeReason(mistakeReason || aiMistakeReasonSuggestion);
+        const finalMasteryStatus = normalizeMasteryStatus(masteryStatus);
 
         // 创建错题记录
         try {
@@ -175,6 +190,20 @@ export async function POST(req: Request) {
                     paperLevel: paperLevel,
                     geogebraCommands: geogebraCommands || null,
                     masteryLevel: 0,
+                    examType: normalizeExamType(examType),
+                    subjectModule: finalSubjectModule,
+                    questionType: questionType || null,
+                    optionsJson: JSON.stringify(parseOptionsText(options)),
+                    mistakeReason: finalMistakeReason,
+                    aiMistakeReasonSuggestion: normalizeMistakeReason(aiMistakeReasonSuggestion || mistakeReason),
+                    fastestSolution: fastestSolution || null,
+                    trapAnalysis: trapAnalysis || null,
+                    nextReviewTip: nextReviewTip || null,
+                    similarQuestionMethod: similarQuestionMethod || null,
+                    masteryStatus: finalMasteryStatus,
+                    nextReviewAt: firstReviewAt,
+                    consecutiveCorrectCount: 0,
+                    wrongReviewCount: 0,
                     tags: {
                         connect: tagConnections,
                     },
@@ -182,6 +211,14 @@ export async function POST(req: Request) {
                 include: {
                     tags: true,
                 },
+            });
+
+            await prisma.reviewSchedule.createMany({
+                data: reviewSchedules.map(schedule => ({
+                    errorItemId: errorItem.id,
+                    reviewStage: schedule.reviewStage,
+                    scheduledFor: schedule.scheduledFor,
+                })),
             });
 
             logger.info({ errorItemId: errorItem.id, tagsCount: errorItem.tags?.length || 0 }, 'ErrorItem created successfully');

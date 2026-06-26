@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { RegisterRequest } from "@/types/api";
+import { CIVIL_SERVICE_EXAM_TYPES } from "@/lib/civil-service";
 
 export default function RegisterPage() {
     const router = useRouter();
@@ -18,8 +19,7 @@ export default function RegisterPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [educationStage, setEducationStage] = useState("junior_high");
-    const [enrollmentYear, setEnrollmentYear] = useState("2025");
+    const [examType, setExamType] = useState("省考");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -58,8 +58,7 @@ export default function RegisterPage() {
                 name,
                 email,
                 password,
-                educationStage,
-                enrollmentYear: parseInt(enrollmentYear)
+                examType,
             });
 
             alert(t.auth?.register?.success || 'Registration successful! Please login');
@@ -213,39 +212,21 @@ export default function RegisterPage() {
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <label htmlFor="educationStage" className="text-sm font-medium">
-                                {t.auth?.educationStage || 'Education Stage'}
+                            <label htmlFor="examType" className="text-sm font-medium">
+                                {t.auth?.examType || '考试类型'}
                             </label>
                             <select
-                                id="educationStage"
-                                name="educationStage"
+                                id="examType"
+                                name="examType"
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                value={educationStage}
-                                onChange={(e) => setEducationStage(e.target.value)}
+                                value={examType}
+                                onChange={(e) => setExamType(e.target.value)}
                                 required
                             >
-                                <option value="" disabled>{t.auth?.selectStage || 'Select Stage'}</option>
-                                <option value="primary">{t.auth?.primary || 'Primary School'}</option>
-                                <option value="junior_high">{t.auth?.juniorHigh || 'Junior High'}</option>
-                                <option value="senior_high">{t.auth?.seniorHigh || 'Senior High'}</option>
-                                <option value="university">{t.auth?.university || 'University'}</option>
+                                {CIVIL_SERVICE_EXAM_TYPES.map(item => (
+                                    <option key={item} value={item}>{item}</option>
+                                ))}
                             </select>
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="enrollmentYear" className="text-sm font-medium">
-                                {t.auth?.enrollmentYear || 'Enrollment Year'}
-                            </label>
-                            <Input
-                                id="enrollmentYear"
-                                name="enrollmentYear"
-                                type="number"
-                                value={enrollmentYear}
-                                onChange={(e) => setEnrollmentYear(e.target.value)}
-                                placeholder="YYYY"
-                                required
-                                min={1990}
-                                max={new Date().getFullYear()}
-                            />
                         </div>
                         {error && (
                             <div className="text-red-500 text-sm text-center">{error}</div>

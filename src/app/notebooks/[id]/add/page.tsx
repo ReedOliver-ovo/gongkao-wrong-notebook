@@ -244,14 +244,7 @@ export default function AddErrorPage() {
         try {
             setAnalysisStep('analyzing');
 
-            const result = await apiClient.post<{
-                answerText: string;
-                analysis: string;
-                knowledgePoints: string[];
-                wrongAnswerText: string;
-                mistakeAnalysis: string;
-                mistakeStatus: string;
-            }>("/api/reanswer", {
+            const result = await apiClient.post<Partial<ParsedQuestion>>("/api/reanswer", {
                 questionText,
                 language,
                 subject: notebook?.name || undefined,
@@ -262,14 +255,25 @@ export default function AddErrorPage() {
 
             const parsed: ParsedQuestion = {
                 questionText,
-                answerText: result.answerText,
-                analysis: result.analysis,
+                answerText: result.answerText || "",
+                analysis: result.analysis || "",
                 knowledgePoints: result.knowledgePoints || [],
                 wrongAnswerText: result.wrongAnswerText || "",
                 mistakeAnalysis: result.mistakeAnalysis || "",
                 mistakeStatus: (result.mistakeStatus as any) || "unknown",
                 subject: "数学",
                 requiresImage: false,
+                examType: result.examType || "省考",
+                subjectModule: result.subjectModule || "其他",
+                questionType: result.questionType || "",
+                options: result.options || [],
+                mistakeReason: result.mistakeReason || "其他",
+                aiMistakeReasonSuggestion: result.aiMistakeReasonSuggestion || result.mistakeReason || "其他",
+                fastestSolution: result.fastestSolution || "",
+                trapAnalysis: result.trapAnalysis || "",
+                nextReviewTip: result.nextReviewTip || "",
+                similarQuestionMethod: result.similarQuestionMethod || "",
+                masteryStatus: result.masteryStatus || "未复盘",
             };
 
             setCurrentImage(null);

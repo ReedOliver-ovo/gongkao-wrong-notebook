@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { createLogger } from "@/lib/logger";
+import { normalizeKnowledgeTagSubject } from "@/lib/civil-service";
 
 const logger = createLogger('api:tags:suggestions');
 
@@ -11,8 +12,7 @@ const logger = createLogger('api:tags:suggestions');
  * 获取标签建议（支持搜索）
  * Query params: 
  *   - q: 搜索词
- *   - subject: 学科 (可选, e.g., 'math')
- *   - stage: 学段 (可选)
+ *   - subject: 科目模块 (可选；兼容旧学科 key)
  * 
  * 现在从数据库 KnowledgeTag 表查询，包含系统标签和用户的自定义标签
  */
@@ -21,8 +21,8 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         const { searchParams } = new URL(req.url);
         const query = searchParams.get("q")?.toLowerCase() || "";
-        const subject = searchParams.get("subject") || undefined;
-        const stage = searchParams.get("stage") || undefined;
+        const subjectParam = searchParams.get("subject") || undefined;
+        const subject = subjectParam ? normalizeKnowledgeTagSubject(subjectParam) : undefined;
 
         let user;
         if (session?.user?.email) {
@@ -63,39 +63,7 @@ export async function GET(req: Request) {
         // But the query for 'children' relies on the relation.
         // Let's filter in memory.
 
-        const tagMap = new Map<string, typeof allTags[0]>();
-        allTags.forEach(t => tagMap.set(t.id, t));
-
         let suggestions = allTags.filter(t => t.children.length === 0);
-
-        // Filter by stage if provided
-        if (stage) {
-            const allowedGradePatterns: Record<string, string[]> = {
-                'primary': ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级'],
-                'junior_high': ['七年级', '八年级', '九年级'],
-                'senior_high': ['高一', '高二', '高三'],
-            };
-
-            const filters = allowedGradePatterns[stage];
-            if (filters) {
-                suggestions = suggestions.filter(tag => {
-                    // Always show user custom tags (non-system tags) regardless of stage filter
-                    // unless we want to enforce structure on them too? Usually custom tags have flattened structure or no parent
-                    if (!tag.isSystem) {
-                        return true;
-                    }
-
-                    let current = tag;
-                    // Traverse up to find root
-                    while (current.parentId && tagMap.get(current.parentId)) {
-                        current = tagMap.get(current.parentId)!;
-                    }
-                    // Current is now the root (or top-most loaded ancestor)
-                    const isMatch = filters.some(f => current.name.includes(f));
-                    return isMatch;
-                });
-            }
-        }
 
         // Filter by query
         if (query) {

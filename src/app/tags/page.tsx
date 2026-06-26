@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiClient } from "@/lib/api-client";
 import { TagStats, TagStatsResponse } from "@/types/api";
+import { CIVIL_SERVICE_SUBJECT_MODULES, type CivilServiceSubjectModule } from "@/lib/civil-service";
 
 // 标签树节点类型
 interface TagTreeNode {
@@ -23,46 +24,24 @@ interface TagTreeNode {
     children: TagTreeNode[];
 }
 
-// 学科配置
-const SUBJECTS = [
-    { key: 'math', name: '数学' },
-    { key: 'english', name: '英语' },
-    { key: 'physics', name: '物理' },
-    { key: 'chemistry', name: '化学' },
-    { key: 'biology', name: '生物' },
-    { key: 'chinese', name: '语文' },
-    { key: 'history', name: '历史' },
-    { key: 'geography', name: '地理' },
-    { key: 'politics', name: '政治' },
-] as const;
-
-type SubjectKey = typeof SUBJECTS[number]['key'];
+const MODULES = CIVIL_SERVICE_SUBJECT_MODULES.map(name => ({ key: name, name }));
+type SubjectKey = CivilServiceSubjectModule;
 
 export default function TagsPage() {
     const { t } = useLanguage();
     const [stats, setStats] = useState<TagStats[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // 标签数据 (按学科) - null 表示未加载，[] 表示已加载但无数据
-    const [tagsBySubject, setTagsBySubject] = useState<Record<SubjectKey, TagTreeNode[] | null>>({
-        math: null,
-        english: null,
-        physics: null,
-        chemistry: null,
-        biology: null,
-        chinese: null,
-        history: null,
-        geography: null,
-        politics: null,
-    });
+    // 标签数据 (按考公/考编模块) - null 表示未加载，[] 表示已加载但无数据
+    const [tagsBySubject, setTagsBySubject] = useState<Record<SubjectKey, TagTreeNode[] | null>>(
+        () => Object.fromEntries(MODULES.map(({ key }) => [key, null])) as Record<SubjectKey, TagTreeNode[] | null>
+    );
 
     // 自定义标签 (扁平列表，仅用于显示)
     const [customTags, setCustomTags] = useState<Array<{ id: string; name: string; subject: string; parentName?: string }>>([]);
 
     // 新建标签表单
-    const [newTagSubject, setNewTagSubject] = useState<SubjectKey>("math");
-    const [newTagGrade, setNewTagGrade] = useState<string>(""); // 年级ID
-    const [gradeOptions, setGradeOptions] = useState<Array<{ id: string; name: string }>>([]);
+    const [newTagSubject, setNewTagSubject] = useState<SubjectKey>("言语理解");
     const [newTagName, setNewTagName] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
@@ -72,7 +51,7 @@ export default function TagsPage() {
     // 获取标签树
     const fetchTags = useCallback(async (subject: SubjectKey) => {
         try {
-            const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${subject}`);
+            const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${encodeURIComponent(subject)}`);
             setTagsBySubject(prev => ({ ...prev, [subject]: data.tags }));
         } catch (error) {
             console.error(`Failed to fetch ${subject} tags:`, error);
@@ -82,11 +61,11 @@ export default function TagsPage() {
     // 获取自定义标签
     const fetchCustomTags = useCallback(async () => {
         try {
-            // 获取所有学科的扁平标签，过滤非系统标签
+            // 获取所有模块的扁平标签，过滤非系统标签
             const allCustom: Array<{ id: string; name: string; subject: string; parentName?: string }> = [];
-            for (const { key } of SUBJECTS) {
+            for (const { key } of MODULES) {
                 const data = await apiClient.get<{ tags: Array<{ id: string; name: string; isSystem: boolean; parentName?: string }> }>(
-                    `/api/tags?subject=${key}&flat=true`
+                    `/api/tags?subject=${encodeURIComponent(key)}&flat=true`
                 );
                 const custom = data.tags.filter(t => !t.isSystem).map(t => ({ ...t, subject: key }));
                 allCustom.push(...custom);
@@ -113,28 +92,9 @@ export default function TagsPage() {
         // 初始加载
         fetchStats();
         fetchCustomTags();
-        // 默认加载数学标签
-        fetchTags('math');
+        // 默认加载第一个考公模块
+        fetchTags('言语理解');
     }, [fetchTags, fetchCustomTags]);
-
-    // 当学科变化时，获取对应的年级列表
-    useEffect(() => {
-        const fetchGrades = async () => {
-            try {
-                const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${newTagSubject}`);
-                // 顶级节点就是年级，只取系统标签
-                const grades = data.tags
-                    .filter(t => t.isSystem)
-                    .map(t => ({ id: t.id, name: t.name }));
-                setGradeOptions(grades);
-                setNewTagGrade(""); // 重置选择
-            } catch (error) {
-                console.error("Failed to fetch grades:", error);
-                setGradeOptions([]);
-            }
-        };
-        fetchGrades();
-    }, [newTagSubject]);
 
     // 添加自定义标签
     const handleAddCustomTag = async () => {
@@ -148,7 +108,6 @@ export default function TagsPage() {
             await apiClient.post('/api/tags', {
                 name: newTagName.trim(),
                 subject: newTagSubject,
-                parentId: (newTagGrade && newTagGrade !== 'none') ? newTagGrade : undefined,
             });
             setNewTagName("");
             // 刷新
@@ -265,7 +224,7 @@ export default function TagsPage() {
     const renderStandardTags = () => {
         return (
             <>
-                {SUBJECTS.map(({ key, name }) => {
+                {MODULES.map(({ key, name }) => {
                     const subjectName = (t.tags?.subjects as any)?.[key] || name;
                     const isExpanded = expandedNodes[`subject-${key}`];
                     const tags = tagsBySubject[key];
@@ -327,20 +286,8 @@ export default function TagsPage() {
                             <Select value={newTagSubject} onValueChange={(v) => setNewTagSubject(v as SubjectKey)}>
                                 <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {SUBJECTS.map(({ key, name }) => (
+                                    {MODULES.map(({ key, name }) => (
                                         <SelectItem key={key} value={key}>{(t.tags?.subjects as any)?.[key] || name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            <Select value={newTagGrade} onValueChange={setNewTagGrade}>
-                                <SelectTrigger className="w-[140px]">
-                                    <SelectValue placeholder={t.tags?.custom?.selectGrade || "选择年级"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">{t.tags?.custom?.noGrade || "不选择年级"}</SelectItem>
-                                    {gradeOptions.map((grade) => (
-                                        <SelectItem key={grade.id} value={grade.id}>{grade.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -368,7 +315,7 @@ export default function TagsPage() {
                         {t.tags?.custom?.empty || "No custom tags yet, click above to add!"}
                     </CardContent></Card>
                 ) : (
-                    SUBJECTS.map(({ key, name }) => {
+                    MODULES.map(({ key, name }) => {
                         const tags = groupedBySubject[key];
                         if (!tags?.length) return null;
 

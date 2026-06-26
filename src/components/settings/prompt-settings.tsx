@@ -114,7 +114,7 @@ export function PromptSettings({ config, onUpdate }: PromptSettingsProps) {
                                 />
                                 <VariableInfo
                                     name="knowledge_points_list"
-                                    description={t.settings?.prompts?.vars?.knowledgePointsList || "Injects the standard list of knowledge point tags for the specific subject."}
+                                    description={t.settings?.prompts?.vars?.knowledgePointsList || "Injects civil-service module, question type, and method tags for review."}
                                 />
                                 <VariableInfo
                                     name="provider_hints"

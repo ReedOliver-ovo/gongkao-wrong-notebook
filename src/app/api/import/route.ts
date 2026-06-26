@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { unauthorized, internalError, badRequest, forbidden } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
+import { normalizeKnowledgeTagSubject } from "@/lib/civil-service";
 
 const logger = createLogger('api:import');
 
@@ -15,6 +16,7 @@ interface ImportData {
         id: string;
         email: string;
         name: string | null;
+        examType?: string | null;
         educationStage: string | null;
         enrollmentYear: number | null;
         role: string;
@@ -51,10 +53,25 @@ interface ImportData {
         mistakeAnalysis: string | null;
         mistakeStatus: string | null;
         knowledgePoints: string | null;
+        examType?: string | null;
+        subjectModule?: string | null;
+        questionType?: string | null;
+        optionsJson?: string | null;
+        mistakeReason?: string | null;
+        aiMistakeReasonSuggestion?: string | null;
+        fastestSolution?: string | null;
+        trapAnalysis?: string | null;
+        nextReviewTip?: string | null;
+        similarQuestionMethod?: string | null;
         source: string | null;
         errorType: string | null;
         userNotes: string | null;
         masteryLevel: number;
+        masteryStatus?: string | null;
+        nextReviewAt?: string | null;
+        lastReviewedAt?: string | null;
+        consecutiveCorrectCount?: number;
+        wrongReviewCount?: number;
         gradeSemester: string | null;
         paperLevel: string | null;
         createdAt: string;
@@ -64,6 +81,7 @@ interface ImportData {
     reviewSchedules: Array<{
         id: string;
         errorItemId: string;
+        reviewStage?: number;
         scheduledFor: string;
         completedAt: string | null;
         isCorrect: boolean | null;
@@ -188,7 +206,7 @@ export async function POST(req: Request) {
                     const created = await tx.knowledgeTag.create({
                         data: {
                             name: tag.name,
-                            subject: tag.subject,
+                            subject: normalizeKnowledgeTagSubject(tag.subject),
                             isSystem: false,
                             userId: targetUserId,
                             parentId: newParentId,
@@ -262,10 +280,25 @@ export async function POST(req: Request) {
                         mistakeAnalysis: item.mistakeAnalysis,
                         mistakeStatus: item.mistakeStatus,
                         knowledgePoints: item.knowledgePoints,
+                        examType: item.examType || null,
+                        subjectModule: item.subjectModule || null,
+                        questionType: item.questionType || null,
+                        optionsJson: item.optionsJson || null,
+                        mistakeReason: item.mistakeReason || null,
+                        aiMistakeReasonSuggestion: item.aiMistakeReasonSuggestion || null,
+                        fastestSolution: item.fastestSolution || null,
+                        trapAnalysis: item.trapAnalysis || null,
+                        nextReviewTip: item.nextReviewTip || null,
+                        similarQuestionMethod: item.similarQuestionMethod || null,
                         source: item.source,
                         errorType: item.errorType,
                         userNotes: item.userNotes,
                         masteryLevel: safeMasteryLevel(item.masteryLevel),
+                        masteryStatus: item.masteryStatus || '未复盘',
+                        nextReviewAt: safeParseDate(item.nextReviewAt),
+                        lastReviewedAt: safeParseDate(item.lastReviewedAt),
+                        consecutiveCorrectCount: item.consecutiveCorrectCount || 0,
+                        wrongReviewCount: item.wrongReviewCount || 0,
                         gradeSemester: item.gradeSemester,
                         paperLevel: item.paperLevel,
                         createdAt: safeParseDate(item.createdAt),
@@ -315,6 +348,7 @@ export async function POST(req: Request) {
                         await tx.reviewSchedule.create({
                             data: {
                                 errorItemId: newErrorItemId,
+                                reviewStage: schedule.reviewStage || 1,
                                 scheduledFor,
                                 completedAt: safeParseDate(schedule.completedAt),
                                 isCorrect: schedule.isCorrect,

@@ -3,9 +3,15 @@ import { AIService, ParsedQuestion, DifficultyLevel, ReanswerQuestionResult, Geo
 import { generateAnalyzePrompt, generateSimilarQuestionPrompt, generateReanswerPrompt, generateGeogebraPrompt } from './prompts';
 import { getAppConfig } from '../config';
 import { safeParseParsedQuestion } from './schema';
-import { getMathTagsFromDB, getTagsFromDB } from './tag-service';
+import { getCivilServiceTagsFromDB } from './tag-service';
 import { createLogger } from '../logger';
 import { normalizeMistakeStatusForSave } from '../mistake-status';
+import {
+    normalizeExamType,
+    normalizeMistakeReason,
+    normalizeSubjectModule,
+    parseOptionsText,
+} from '../civil-service';
 
 const logger = createLogger('ai:azure');
 
@@ -91,6 +97,7 @@ export class AzureOpenAIProvider implements AIService {
         const wrongAnswerText = this.extractTag(text, "wrong_answer_text") || "";
         const mistakeAnalysis = this.extractTag(text, "mistake_analysis") || "";
         const mistakeStatusRaw = this.extractTag(text, "mistake_status");
+        const mistakeReason = normalizeMistakeReason(this.extractTag(text, "mistake_reason"));
 
         // Basic Validation
         if (!questionText || !answerText || !analysis) {
@@ -125,7 +132,18 @@ export class AzureOpenAIProvider implements AIService {
             mistakeStatus,
             subject,
             knowledgePoints,
-            requiresImage
+            requiresImage,
+            examType: normalizeExamType(this.extractTag(text, "exam_type")),
+            subjectModule: normalizeSubjectModule(this.extractTag(text, "subject_module")),
+            questionType: this.extractTag(text, "question_type") || "",
+            options: parseOptionsText(this.extractTag(text, "options")),
+            mistakeReason,
+            aiMistakeReasonSuggestion: mistakeReason,
+            fastestSolution: this.extractTag(text, "fastest_solution") || "",
+            trapAnalysis: this.extractTag(text, "trap_analysis") || "",
+            nextReviewTip: this.extractTag(text, "next_review_tip") || "",
+            similarQuestionMethod: this.extractTag(text, "similar_question_method") || "",
+            masteryStatus: "未复盘",
         };
 
         // Final Schema Validation
@@ -149,21 +167,11 @@ export class AzureOpenAIProvider implements AIService {
     ): Promise<ParsedQuestion> {
         const config = getAppConfig();
 
-        // 从数据库获取各学科标签（参考 openai-provider.ts）
-        // 如果指定了学科，只获取该学科；否则获取所有学科标签供 AI 判断
-        const prefetchedMathTags = (subject === '数学' || !subject) ? await getMathTagsFromDB(grade || null) : [];
-        const prefetchedPhysicsTags = (subject === '物理' || !subject) ? await getTagsFromDB('physics') : [];
-        const prefetchedChemistryTags = (subject === '化学' || !subject) ? await getTagsFromDB('chemistry') : [];
-        const prefetchedBiologyTags = (subject === '生物' || !subject) ? await getTagsFromDB('biology') : [];
-        const prefetchedEnglishTags = (subject === '英语' || !subject) ? await getTagsFromDB('english') : [];
+        const civilServiceTags = await getCivilServiceTagsFromDB(subject);
 
         const systemPrompt = generateAnalyzePrompt(language, grade, subject, {
             customTemplate: config.prompts?.analyze,
-            prefetchedMathTags,
-            prefetchedPhysicsTags,
-            prefetchedChemistryTags,
-            prefetchedBiologyTags,
-            prefetchedEnglishTags,
+            additionalTags: civilServiceTags,
         }, gradeSemester);
 
         logger.box('🔍 AI Image Analysis Request', {
@@ -365,10 +373,29 @@ Knowledge Points: ${knowledgePoints.join(", ")}
                 this.extractTag(text, "mistake_status"),
                 wrongAnswerText
             );
+            const mistakeReason = normalizeMistakeReason(this.extractTag(text, "mistake_reason"));
 
             logger.info('Reanswer parsed successfully');
 
-            return { answerText, analysis, knowledgePoints, wrongAnswerText, mistakeAnalysis, mistakeStatus };
+            return {
+                answerText,
+                analysis,
+                knowledgePoints,
+                wrongAnswerText,
+                mistakeAnalysis,
+                mistakeStatus,
+                examType: normalizeExamType(this.extractTag(text, "exam_type")),
+                subjectModule: normalizeSubjectModule(this.extractTag(text, "subject_module")),
+                questionType: this.extractTag(text, "question_type") || "",
+                options: parseOptionsText(this.extractTag(text, "options")),
+                mistakeReason,
+                aiMistakeReasonSuggestion: mistakeReason,
+                fastestSolution: this.extractTag(text, "fastest_solution") || "",
+                trapAnalysis: this.extractTag(text, "trap_analysis") || "",
+                nextReviewTip: this.extractTag(text, "next_review_tip") || "",
+                similarQuestionMethod: this.extractTag(text, "similar_question_method") || "",
+                masteryStatus: "未复盘",
+            };
 
         } catch (error) {
             logger.error({ error, stack: error instanceof Error ? error.stack : undefined }, 'Error during reanswer');
